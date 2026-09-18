@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/config";
 import { supabaseAdmin } from "./supabase/admin";
 import type { Client, EventType } from "./types";
 
@@ -5,7 +6,7 @@ import type { Client, EventType } from "./types";
 export async function getPublicClient(slug: string, host?: string | null): Promise<Client | null> {
   const db = supabaseAdmin();
   let q = db.from("clients").select("*").eq("is_active", true);
-  q = host && !host.includes(process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, "") ?? "localhost")
+  q = host && !host.includes(appUrl().replace(/^https?:\/\//, ""))
     ? q.eq("custom_domain", host)
     : q.eq("slug", slug);
   const { data } = await q.maybeSingle();

@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/config";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "./types";
 
 const API = process.env.NYLAS_API_URL ?? "https://api.eu.nylas.com";
@@ -25,7 +26,7 @@ async function nylas<T>(path: string, init: RequestInit = {}): Promise<T> {
 export function hostedAuthUrl(state: string, loginHint?: string) {
   const p = new URLSearchParams({
     client_id: process.env.NYLAS_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/nylas/callback`,
+    redirect_uri: `${appUrl()}/api/nylas/callback`,
     response_type: "code",
     access_type: "offline",
     state,
@@ -43,7 +44,7 @@ export async function exchangeCode(code: string) {
         client_id: process.env.NYLAS_CLIENT_ID,
         client_secret: process.env.NYLAS_API_KEY,
         grant_type: "authorization_code",
-        redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/nylas/callback`,
+        redirect_uri: `${appUrl()}/api/nylas/callback`,
         code,
       }),
     }
@@ -78,7 +79,7 @@ export function buildConfiguration(
     return { days: days.map((d) => DAY_NAMES[d]), timezone: client.timezone, start, end };
   });
 
-  const base = process.env.NEXT_PUBLIC_APP_URL;
+  const base = appUrl();
   const bookingCalendar = conn.external_calendar_id ?? "primary";
   const checkCalendars = conn.check_calendar_ids.length ? conn.check_calendar_ids : [bookingCalendar];
 

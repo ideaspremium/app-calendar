@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/config";
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCode, listCalendars } from "@/lib/nylas";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -31,5 +32,5 @@ export async function GET(req: NextRequest) {
     { onConflict: "nylas_grant_id" }
   );
 
-  return NextResponse.redirect(new URL(`/admin/clients/${clientId}?connected=1`, process.env.NEXT_PUBLIC_APP_URL));
+  return NextResponse.redirect(new URL(`/admin/clients/${clientId}?connected=1`, appUrl()));
 }

@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/config";
 import { NextResponse } from "next/server";
 
 /**
@@ -5,7 +6,7 @@ import { NextResponse } from "next/server";
  *                          data-mode="inline|popup" data-label="Reservar cita" data-color="#123456"></script>
  */
 export function GET() {
-  const base = process.env.NEXT_PUBLIC_APP_URL;
+  const base = appUrl();
   const js = `(function(){
   var s=document.currentScript; if(!s) return;
   var d=s.dataset, base="${base}";

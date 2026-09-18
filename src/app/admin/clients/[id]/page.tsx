@@ -1,3 +1,4 @@
+import { appUrl } from "@/lib/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Field } from "@/components/Field";
@@ -30,7 +31,7 @@ export default async function ClientDetail({
   const byDay = new Map<number, AvailabilityRule[]>();
   (rules as AvailabilityRule[] | null)?.forEach((r) => byDay.set(r.weekday, [...(byDay.get(r.weekday) ?? []), r]));
   const editing = eventTypes.find((t) => t.id === edit);
-  const base = process.env.NEXT_PUBLIC_APP_URL;
+  const base = appUrl();
   const publicUrl = c.custom_domain ? `https://${c.custom_domain}` : `${base}/${c.slug}`;
 
   return (
