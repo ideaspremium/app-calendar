@@ -12,6 +12,43 @@ export async function signOut() {
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+type Question = { key: string; label: string; type: string; required: boolean };
+
+const questionKey = (label: string, i: number) =>
+  `q${i + 1}_${slugify(label).replace(/-/g, "_") || "campo"}`;
+
+/**
+ * Lee las preguntas del editor visual (`questions_json`).
+ * Mantiene como respaldo el formato antiguo de texto "Etiqueta | tipo | *".
+ */
+function parseQuestions(form: FormData): Question[] {
+  const json = String(form.get("questions_json") || "").trim();
+  if (json) {
+    try {
+      const parsed = JSON.parse(json) as { label?: string; type?: string; required?: boolean }[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((q) => String(q?.label ?? "").trim())
+        .map((q, i) => {
+          const label = String(q.label).trim();
+          return { key: questionKey(label, i), label, type: q.type || "text", required: !!q.required };
+        });
+    } catch {
+      return [];
+    }
+  }
+  const raw = String(form.get("questions") || "").trim();
+  if (!raw) return [];
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line, i) => {
+      const [label, type = "text", req = ""] = line.split("|").map((x) => x.trim());
+      return { key: questionKey(label, i), label, type: type || "text", required: req === "*" };
+    })
+    .filter((q) => q.label);
+}
+
 export async function createClient(form: FormData) {
   const sb = await supabaseServer();
   const name = String(form.get("name"));
@@ -54,6 +91,7 @@ export async function updateBranding(form: FormData) {
   }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/clients/${id}`);
+  redirect(`/admin/clients/${id}?saved=datos`);
 }
 
 export async function saveAvailability(form: FormData) {
@@ -74,6 +112,7 @@ export async function saveAvailability(form: FormData) {
     if (error) throw new Error(error.message);
   }
   revalidatePath(`/admin/clients/${clientId}`);
+  redirect(`/admin/clients/${clientId}?saved=horario`);
 }
 
 export async function saveEventType(form: FormData) {
@@ -81,13 +120,7 @@ export async function saveEventType(form: FormData) {
   const clientId = String(form.get("client_id"));
   const id = String(form.get("id") || "");
   const name = String(form.get("name"));
-  const questionsRaw = String(form.get("questions") || "").trim();
-  const questions = questionsRaw
-    ? questionsRaw.split("\n").filter(Boolean).map((l, i) => {
-        const [label, type = "text", req = ""] = l.split("|").map((x) => x.trim());
-        return { key: `q${i + 1}_${slugify(label).replace(/-/g, "_")}`, label, type, required: req === "*" };
-      })
-    : [];
+  const questions = parseQuestions(form);
   const payload = {
     client_id: clientId,
     calendar_connection_id: String(form.get("calendar_connection_id") || "") || null,
@@ -109,6 +142,7 @@ export async function saveEventType(form: FormData) {
   const { error } = await q;
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/clients/${clientId}`);
+  redirect(`/admin/clients/${clientId}?saved=${id ? "cita" : "cita_nueva"}`);
 }
 
 export async function deleteEventType(form: FormData) {
@@ -116,4 +150,5 @@ export async function deleteEventType(form: FormData) {
   const id = String(form.get("id")), clientId = String(form.get("client_id"));
   await sb.from("event_types").update({ is_active: false }).eq("id", id);
   revalidatePath(`/admin/clients/${clientId}`);
+  redirect(`/admin/clients/${clientId}?saved=desactivada`);
 }

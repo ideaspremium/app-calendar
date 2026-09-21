@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { Field } from "@/components/Field";
 import CopyBlock from "@/components/CopyBlock";
 import SyncButton from "@/components/SyncButton";
+import SubmitButton from "@/components/SubmitButton";
+import QuestionsEditor from "@/components/QuestionsEditor";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "@/lib/types";
 import { deleteEventType, saveAvailability, saveEventType, updateBranding } from "../../actions";
@@ -11,11 +13,19 @@ import { deleteEventType, saveAvailability, saveEventType, updateBranding } from
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+const SAVED_NOTICES: Record<string, string> = {
+  horario: "Horario de atención guardado.",
+  cita_nueva: "Tipo de cita creado. Pulsa «Publicar» para aplicarlo en Nylas.",
+  cita: "Cambios del tipo de cita guardados. Pulsa «Publicar» para aplicarlos en Nylas.",
+  desactivada: "Tipo de cita desactivado.",
+  datos: "Datos e imagen del cliente guardados.",
+};
+
 export default async function ClientDetail({
   params, searchParams,
-}: { params: Promise<{ id: string }>; searchParams: Promise<{ connected?: string; edit?: string }> }) {
+}: { params: Promise<{ id: string }>; searchParams: Promise<{ connected?: string; edit?: string; saved?: string }> }) {
   const { id } = await params;
-  const { connected, edit } = await searchParams;
+  const { connected, edit, saved } = await searchParams;
   const sb = await supabaseServer();
   const { data: client } = await sb.from("clients").select("*").eq("id", id).maybeSingle();
   if (!client) notFound();
@@ -45,6 +55,9 @@ export default async function ClientDetail({
       </header>
 
       {connected && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">Calendario conectado correctamente.</p>}
+      {saved && SAVED_NOTICES[saved] && (
+        <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{SAVED_NOTICES[saved]}</p>
+      )}
 
       {/* 1. Calendarios conectados */}
       <section className="rounded-xl border bg-white p-6">
@@ -84,7 +97,7 @@ export default async function ClientDetail({
               </div>
             );
           })}
-          <button className="mt-2 rounded-lg bg-black px-4 py-2 text-sm text-white">Guardar horario</button>
+          <div className="mt-2"><SubmitButton>Guardar horario</SubmitButton></div>
         </form>
       </section>
 
@@ -104,7 +117,7 @@ export default async function ClientDetail({
                   <SyncButton eventTypeId={t.id} hasConfig={!!t.nylas_configuration_id} />
                   <Link href={`?edit=${t.id}`} className="rounded-lg border px-3 py-1.5 text-sm">Editar</Link>
                   <form action={deleteEventType}><input type="hidden" name="id" value={t.id} /><input type="hidden" name="client_id" value={c.id} />
-                    <button className="rounded-lg border px-3 py-1.5 text-sm text-red-700">Desactivar</button></form>
+                    <SubmitButton pendingLabel="Desactivando…" className="rounded-lg border px-3 py-1.5 text-sm text-red-700">Desactivar</SubmitButton></form>
                 </div>
               </div>
               {t.nylas_configuration_id && (
@@ -149,12 +162,9 @@ export default async function ClientDetail({
             </select>
           </label>
           <Field label="Dirección / detalle de ubicación" name="location_details" defaultValue={editing?.location_details ?? ""} />
-          <label className="block text-sm sm:col-span-2">Preguntas adicionales (una por línea: <code>Etiqueta | tipo | *</code>; tipo: text, phone_number, email, multi_line_text; * = obligatoria)
-            <textarea name="questions" rows={3} className="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs"
-              defaultValue={editing?.questions.map((q) => `${q.label} | ${q.type}${q.required ? " | *" : ""}`).join("\n") ?? "Teléfono | phone_number | *"} />
-          </label>
-          <div className="flex gap-2 sm:col-span-2">
-            <button className="rounded-lg bg-black px-4 py-2 text-sm text-white">{editing ? "Guardar cambios" : "Crear tipo de cita"}</button>
+          <QuestionsEditor key={editing?.id ?? "nueva"} initial={editing?.questions} />
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <SubmitButton>{editing ? "Guardar cambios" : "Crear tipo de cita"}</SubmitButton>
             {editing && <Link href={`/admin/clients/${c.id}`} className="rounded-lg border px-4 py-2 text-sm">Cancelar</Link>}
           </div>
         </form>
@@ -175,7 +185,7 @@ export default async function ClientDetail({
           <Field label="Fondo" name="background" type="color" defaultValue={c.branding.background ?? "#ffffff"} />
           <Field label="Texto" name="text_color" type="color" defaultValue={c.branding.text_color ?? "#17181c"} />
           <Field label="Tipografía (CSS)" name="font_family" defaultValue={c.branding.font_family ?? ""} />
-          <div className="sm:col-span-2"><button className="rounded-lg bg-black px-4 py-2 text-sm text-white">Guardar</button>
+          <div className="flex items-center sm:col-span-2"><SubmitButton>Guardar</SubmitButton>
             <span className="ml-3 text-sm opacity-60">Los cambios de imagen se aplican al instante; el nombre y el logo también van a Nylas al volver a publicar.</span></div>
         </form>
       </section>
