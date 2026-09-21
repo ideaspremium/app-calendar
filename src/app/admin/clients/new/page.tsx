@@ -1,5 +1,6 @@
 import { createClient } from "../../actions";
 import { Field } from "@/components/Field";
+import { TimezoneSelect } from "@/components/TimezoneSelect";
 
 export default async function NewClient({ searchParams }: { searchParams: Promise<{ agency?: string }> }) {
   const { agency } = await searchParams;
@@ -9,7 +10,7 @@ export default async function NewClient({ searchParams }: { searchParams: Promis
       <input type="hidden" name="agency_id" value={agency} />
       <Field label="Nombre" name="name" required />
       <Field label="Slug (URL)" name="slug" placeholder="se genera del nombre si lo dejas vacío" />
-      <Field label="Zona horaria" name="timezone" defaultValue="Atlantic/Canary" />
+      <TimezoneSelect value="America/New_York" />
       <Field label="Correo de contacto" name="contact_email" type="email" />
       <Field label="Web del cliente" name="website_url" />
       <h2 className="pt-2 font-medium">Imagen</h2>

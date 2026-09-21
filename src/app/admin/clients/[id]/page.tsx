@@ -6,6 +6,7 @@ import CopyBlock from "@/components/CopyBlock";
 import SyncButton from "@/components/SyncButton";
 import SubmitButton from "@/components/SubmitButton";
 import QuestionsEditor from "@/components/QuestionsEditor";
+import { TimezoneSelect, isValidTimezone } from "@/components/TimezoneSelect";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "@/lib/types";
 import { deleteEventType, saveAvailability, saveEventType, updateBranding } from "../../actions";
@@ -82,6 +83,12 @@ export default async function ClientDetail({
       <section className="rounded-xl border bg-white p-6">
         <h2 className="mb-1 text-lg font-semibold">2. Horario de atención</h2>
         <p className="mb-4 text-sm opacity-70">Zona horaria: <strong>{c.timezone}</strong>. Puedes añadir un segundo tramo (por ejemplo, tarde).</p>
+        {!isValidTimezone(c.timezone) && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            «{c.timezone}» no es una zona horaria válida, así que Nylas la ignora y trata estas horas como UTC:
+            los horarios y los correos saldrán desplazados. Corrígela en la sección 4 y vuelve a pulsar «Actualizar en Nylas».
+          </p>
+        )}
         <form action={saveAvailability} className="space-y-2">
           <input type="hidden" name="client_id" value={c.id} />
           {ORDER.map((d) => {
@@ -176,7 +183,7 @@ export default async function ClientDetail({
         <form action={updateBranding} className="grid gap-3 sm:grid-cols-2">
           <input type="hidden" name="id" value={c.id} />
           <Field label="Nombre" name="name" defaultValue={c.name} />
-          <Field label="Zona horaria" name="timezone" defaultValue={c.timezone} />
+          <TimezoneSelect value={c.timezone} />
           <Field label="Correo de contacto" name="contact_email" defaultValue={(client as { contact_email?: string }).contact_email ?? ""} />
           <Field label="Web del cliente" name="website_url" defaultValue={(client as { website_url?: string }).website_url ?? ""} />
           <Field label="Dominio propio (citas.cliente.com)" name="custom_domain" defaultValue={c.custom_domain ?? ""} />
