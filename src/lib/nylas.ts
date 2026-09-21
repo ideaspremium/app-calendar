@@ -145,6 +145,41 @@ export function buildConfiguration(
   };
 }
 
+/**
+ * Descompone la configuración en capas acumulativas, de la mínima a la completa.
+ * Sirve para localizar qué bloque hace que Nylas devuelva 400 «Invalid request»,
+ * porque la API no indica el campo culpable.
+ */
+export function configurationVariants(full: ReturnType<typeof buildConfiguration>) {
+  const p = full.participants[0];
+  const { additional_fields, email_template, ...schedulerBase } = full.scheduler;
+
+  const a = {
+    participants: [{ email: p.email, availability: p.availability, booking: p.booking, is_organizer: true }],
+    availability: {
+      duration_minutes: full.availability.duration_minutes,
+      interval_minutes: full.availability.interval_minutes,
+    },
+    event_booking: { title: full.event_booking.title },
+  };
+  const b = { ...a, availability: full.availability };
+  const c = { ...b, event_booking: full.event_booking };
+  const d = { ...c, scheduler: schedulerBase };
+  const e = { ...d, scheduler: { ...schedulerBase, email_template } };
+  const f = { ...e, scheduler: { ...schedulerBase, email_template, additional_fields } };
+  const g = { ...f, appearance: full.appearance, name: full.name, requires_session_auth: full.requires_session_auth };
+
+  return [
+    { label: "A · participante + duración", body: a as object },
+    { label: "B · + reglas de disponibilidad", body: b as object },
+    { label: "C · + datos del evento", body: c as object },
+    { label: "D · + ajustes del scheduler", body: d as object },
+    { label: "E · + plantilla de correo", body: e as object },
+    { label: "F · + preguntas adicionales", body: f as object },
+    { label: "G · + apariencia y nombre", body: g as object },
+  ];
+}
+
 export async function upsertConfiguration(configId: string | null, body: object) {
   if (configId) {
     return nylas<{ data: { id: string } }>(`/v3/scheduling/configurations/${configId}`, {

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildConfiguration, upsertConfiguration } from "@/lib/nylas";
+import { buildConfiguration, configurationVariants, deleteConfiguration, upsertConfiguration } from "@/lib/nylas";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "@/lib/types";
 
 /** Crea o actualiza la configuración del Scheduler en Nylas para un tipo de cita. */
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const sb = await supabaseServer();
   const { data: { user } } = await sb.auth.getUser();
@@ -25,6 +25,24 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // Si hay reglas específicas del tipo de cita, prevalecen sobre las generales del cliente
   const specific = await sb.from("availability_rules").select("weekday,start_time,end_time").eq("event_type_id", id);
   const effective = (specific.data?.length ? specific.data : rules) as AvailabilityRule[];
+
+  // Modo diagnóstico: prueba el cuerpo por capas y devuelve en cuál falla.
+  // Cada capa que Nylas acepta se borra al momento para no dejar basura.
+  if (req.nextUrl.searchParams.get("diagnose")) {
+    const full = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective);
+    const steps: { step: string; ok: boolean; error?: string; body?: object }[] = [];
+    for (const variant of configurationVariants(full)) {
+      try {
+        const res = await upsertConfiguration(null, variant.body);
+        steps.push({ step: variant.label, ok: true });
+        await deleteConfiguration(res.data.id).catch(() => {});
+      } catch (err) {
+        steps.push({ step: variant.label, ok: false, error: (err as Error).message, body: variant.body });
+        break;
+      }
+    }
+    return NextResponse.json({ diagnose: steps }, { status: 200 });
+  }
 
   try {
     const body = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective);
