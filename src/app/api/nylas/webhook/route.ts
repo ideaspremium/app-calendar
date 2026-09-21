@@ -3,6 +3,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { updateEventTitle } from "@/lib/nylas";
 
+/** Convierte epoch en segundos o fecha ISO a ISO; null si no es utilizable. */
+function toIso(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    // Nylas usa segundos; si alguna vez llegan milisegundos, el año saldría absurdo.
+    const ms = value > 1e12 ? value : value * 1000;
+    return new Date(ms).toISOString();
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  }
+  return null;
+}
+
+/** Nombres de campos y tipos, sin valores: sirve para diagnosticar sin volcar datos personales. */
+function describeShape(value: unknown, depth = 0): unknown {
+  if (Array.isArray(value)) return value.length ? [describeShape(value[0], depth + 1)] : [];
+  if (value && typeof value === "object") {
+    if (depth >= 2) return "objeto";
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, describeShape(v, depth + 1)])
+    );
+  }
+  return typeof value;
+}
+
 /** Verificación inicial del webhook (Nylas envía ?challenge=...). */
 export async function GET(req: NextRequest) {
   const challenge = req.nextUrl.searchParams.get("challenge");
@@ -48,22 +74,25 @@ export async function POST(req: NextRequest) {
       type === "booking.cancelled" ? "cancelled" :
       type === "booking.rescheduled" ? "rescheduled" : "confirmed";
 
-    const guest = d.guest ?? {};
-    const start = d.start_time ? new Date(d.start_time * 1000).toISOString() : null;
-    const end = d.end_time ? new Date(d.end_time * 1000).toISOString() : null;
+    const guest = d.guest ?? d.guests?.[0] ?? {};
+    // Las horas pueden venir sueltas o dentro de `when`, según el aviso.
+    const when = d.when ?? d.event?.when ?? d.booking?.when ?? {};
+    const start =
+      toIso(d.start_time) ?? toIso(when.start_time) ?? toIso(when.startTime) ?? toIso(d.event?.start_time);
+    const end =
+      toIso(d.end_time) ?? toIso(when.end_time) ?? toIso(when.endTime) ?? toIso(d.event?.end_time);
 
     if (!start || !end) {
       console.error(
-        "[webhook] el aviso no trae horas utilizables.",
-        "start_time:", JSON.stringify(d.start_time),
-        "| end_time:", JSON.stringify(d.end_time)
+        "[webhook] el aviso no trae horas utilizables. Estructura recibida:",
+        JSON.stringify(describeShape(d))
       );
     }
 
     if (et && start && end) {
       const { error: saveError } = await db.from("bookings").upsert(
         {
-          nylas_booking_id: d.booking_id ?? d.id,
+          nylas_booking_id: d.booking_id ?? d.bookingId ?? d.id,
           client_id: et.client_id,
           event_type_id: et.id,
           calendar_connection_id: et.calendar_connection_id,
@@ -74,7 +103,7 @@ export async function POST(req: NextRequest) {
           invitee_timezone: guest.timezone ?? d.timezone ?? "UTC",
           answers: d.additional_fields ?? {},
           status,
-          external_event_id: d.event_id ?? null,
+          external_event_id: d.event_id ?? d.eventId ?? d.event?.id ?? null,
           cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
           source: "web",
         },
@@ -88,7 +117,8 @@ export async function POST(req: NextRequest) {
 
       // El título del evento lo pone Nylas sin el nombre de quien reserva, así que
       // lo añadimos aquí: en la agenda del cliente se distingue una cita de otra.
-      if (status !== "cancelled" && d.event_id && guest.name && et.calendar_connection_id) {
+      const eventId = d.event_id ?? d.eventId ?? d.event?.id;
+      if (status !== "cancelled" && eventId && guest.name && et.calendar_connection_id) {
         const { data: conn } = await db
           .from("calendar_connections")
           .select("nylas_grant_id, external_calendar_id")
@@ -99,7 +129,7 @@ export async function POST(req: NextRequest) {
             await updateEventTitle(
               conn.nylas_grant_id,
               conn.external_calendar_id ?? "primary",
-              d.event_id,
+              eventId,
               `${et.name} — ${guest.name}`
             );
           } catch (e) {
