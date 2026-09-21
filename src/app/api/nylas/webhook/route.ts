@@ -32,9 +32,17 @@ export async function POST(req: NextRequest) {
 
   if (type.startsWith("booking.")) {
     const configId: string | undefined = d.configuration_id;
-    const { data: et } = configId
+    const { data: et, error: etError } = configId
       ? await db.from("event_types").select("id, client_id, calendar_connection_id, name").eq("nylas_configuration_id", configId).maybeSingle()
-      : { data: null };
+      : { data: null, error: null };
+    if (!et) {
+      console.error(
+        "[webhook] no encuentro el tipo de cita.",
+        "configuration_id:", configId ?? "(ausente)",
+        "| error:", etError?.message ?? "ninguno",
+        "| campos del aviso:", Object.keys(d).join(", ")
+      );
+    }
 
     const status =
       type === "booking.cancelled" ? "cancelled" :
@@ -44,8 +52,16 @@ export async function POST(req: NextRequest) {
     const start = d.start_time ? new Date(d.start_time * 1000).toISOString() : null;
     const end = d.end_time ? new Date(d.end_time * 1000).toISOString() : null;
 
+    if (!start || !end) {
+      console.error(
+        "[webhook] el aviso no trae horas utilizables.",
+        "start_time:", JSON.stringify(d.start_time),
+        "| end_time:", JSON.stringify(d.end_time)
+      );
+    }
+
     if (et && start && end) {
-      await db.from("bookings").upsert(
+      const { error: saveError } = await db.from("bookings").upsert(
         {
           nylas_booking_id: d.booking_id ?? d.id,
           client_id: et.client_id,
@@ -64,6 +80,11 @@ export async function POST(req: NextRequest) {
         },
         { onConflict: "nylas_booking_id" }
       );
+      if (saveError) {
+        console.error("[webhook] no se pudo guardar la reserva:", saveError.message, "|", saveError.details ?? "");
+      } else {
+        console.log("[webhook] reserva guardada:", d.booking_id ?? d.id);
+      }
 
       // El título del evento lo pone Nylas sin el nombre de quien reserva, así que
       // lo añadimos aquí: en la agenda del cliente se distingue una cita de otra.

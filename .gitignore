@@ -1,0 +1,25 @@
+# dependencias
+/node_modules
+
+# compilación de Next.js
+/.next/
+/out/
+/build
+
+# variables de entorno: nunca deben subirse, el repositorio es público
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel
+
+# registros
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# sistema operativo
+.DS_Store
+Thumbs.db
