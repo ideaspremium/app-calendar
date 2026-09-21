@@ -58,7 +58,6 @@ export async function listCalendars(grantId: string) {
   return r.data;
 }
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const hhmm = (t: string) => t.slice(0, 5);
 
 /** Traduce nuestro modelo a una Scheduler Configuration de Nylas. */
@@ -74,9 +73,16 @@ export function buildConfiguration(
     const key = `${hhmm(r.start_time)}-${hhmm(r.end_time)}`;
     groups.set(key, [...(groups.get(key) ?? []), r.weekday]);
   }
+  // Nylas espera los días como enteros 0-6 (0 = domingo), no como nombres.
   const open_hours = [...groups.entries()].map(([key, days]) => {
     const [start, end] = key.split("-");
-    return { days: days.map((d) => DAY_NAMES[d]), timezone: client.timezone, start, end };
+    return {
+      days: [...new Set(days)].sort((a, b) => a - b),
+      timezone: client.timezone,
+      start,
+      end,
+      exdates: [] as string[],
+    };
   });
 
   const base = appUrl();
@@ -106,10 +112,11 @@ export function buildConfiguration(
     },
     event_booking: {
       title: `${et.name} — {{invitee_name}}`,
-      description: et.description ?? "",
-      location: et.location_details ?? "",
       booking_type: "booking",
       disable_emails: false,
+      // Nylas rechaza algunos campos opcionales si van vacíos: mejor omitirlos.
+      ...(et.description ? { description: et.description } : {}),
+      ...(et.location_details ? { location: et.location_details } : {}),
     },
     scheduler: {
       available_days_in_future: et.max_days_ahead,
@@ -132,8 +139,8 @@ export function buildConfiguration(
     },
     appearance: {
       company_name: client.name,
-      company_logo_url: client.branding.logo_url ?? "",
       color: client.branding.primary_color ?? "#2563eb",
+      ...(client.branding.logo_url ? { company_logo_url: client.branding.logo_url } : {}),
     },
   };
 }
