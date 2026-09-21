@@ -97,6 +97,7 @@ export function buildConfiguration(
         name: client.name,
         email: conn.account_email,
         is_organizer: true,
+        timezone: client.timezone,
         availability: { calendar_ids: checkCalendars, open_hours },
         booking: { calendar_id: bookingCalendar },
       },
@@ -111,7 +112,11 @@ export function buildConfiguration(
       },
     },
     event_booking: {
-      title: `${et.name} — {{invitee_name}}`,
+      // Nylas no sustituye variables en el título: lo que se escriba aquí sale literal.
+      title: et.name,
+      // Zona horaria con la que Nylas muestra las horas en los correos y recordatorios.
+      // Sin esto los correos salen en UTC.
+      timezone: client.timezone,
       booking_type: "booking",
       disable_emails: false,
       // Nylas rechaza algunos campos opcionales si van vacíos: mejor omitirlos.
@@ -155,7 +160,9 @@ export function configurationVariants(full: ReturnType<typeof buildConfiguration
   const { additional_fields, email_template, ...schedulerBase } = full.scheduler;
 
   const a = {
-    participants: [{ email: p.email, availability: p.availability, booking: p.booking, is_organizer: true }],
+    participants: [
+      { email: p.email, availability: p.availability, booking: p.booking, is_organizer: true, timezone: p.timezone },
+    ],
     availability: {
       duration_minutes: full.availability.duration_minutes,
       interval_minutes: full.availability.interval_minutes,

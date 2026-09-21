@@ -49,14 +49,36 @@ function parseQuestions(form: FormData): Question[] {
     .filter((q) => q.label);
 }
 
+/** Cambia la zona horaria de una agencia: es el valor por defecto de sus clientes nuevos. */
+export async function updateAgencyTimezone(form: FormData) {
+  const sb = await supabaseServer();
+  const id = String(form.get("id"));
+  const { data, error } = await sb
+    .from("agencies")
+    .update({ timezone: String(form.get("timezone")) })
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("No se pudo cambiar la zona horaria de la agencia: tu usuario no tiene permiso.");
+  revalidatePath("/admin");
+  redirect("/admin?saved=zona");
+}
+
 export async function createClient(form: FormData) {
   const sb = await supabaseServer();
   const name = String(form.get("name"));
+  const agencyId = String(form.get("agency_id"));
+  // La zona nace de la agencia; el formulario la trae preseleccionada y esto es el respaldo.
+  let timezone = String(form.get("timezone") || "").trim();
+  if (!timezone) {
+    const { data: agency } = await sb.from("agencies").select("timezone").eq("id", agencyId).maybeSingle();
+    timezone = agency?.timezone || "UTC";
+  }
   const { data, error } = await sb.from("clients").insert({
-    agency_id: String(form.get("agency_id")),
+    agency_id: agencyId,
     name,
     slug: String(form.get("slug") || slugify(name)),
-    timezone: String(form.get("timezone") || "Atlantic/Canary"),
+    timezone,
     locale: String(form.get("locale") || "es"),
     contact_email: String(form.get("contact_email") || "") || null,
     website_url: String(form.get("website_url") || "") || null,

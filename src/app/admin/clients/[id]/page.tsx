@@ -7,6 +7,7 @@ import SyncButton from "@/components/SyncButton";
 import SubmitButton from "@/components/SubmitButton";
 import QuestionsEditor from "@/components/QuestionsEditor";
 import { TimezoneSelect, isValidTimezone } from "@/components/TimezoneSelect";
+import { zoneLabel } from "@/lib/datetime";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "@/lib/types";
 import { deleteEventType, saveAvailability, saveEventType, updateBranding } from "../../actions";
@@ -82,7 +83,9 @@ export default async function ClientDetail({
       {/* 2. Horario */}
       <section className="rounded-xl border bg-white p-6">
         <h2 className="mb-1 text-lg font-semibold">2. Horario de atención</h2>
-        <p className="mb-4 text-sm opacity-70">Zona horaria: <strong>{c.timezone}</strong>. Puedes añadir un segundo tramo (por ejemplo, tarde).</p>
+        <p className="mb-4 text-sm opacity-70">
+          Estas horas son la hora local de <strong>{zoneLabel(c.timezone)}</strong>, la zona del cliente. Puedes añadir un segundo tramo (por ejemplo, tarde).
+        </p>
         {!isValidTimezone(c.timezone) && (
           <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
             «{c.timezone}» no es una zona horaria válida, así que Nylas la ignora y trata estas horas como UTC:
