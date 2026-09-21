@@ -201,6 +201,19 @@ export async function upsertConfiguration(grantId: string, configId: string | nu
   });
 }
 
+/**
+ * Renombra un evento ya creado en el calendario del cliente.
+ * Nylas no sustituye variables en el título, así que el nombre de quien reserva
+ * se añade aquí, al recibir el aviso de la reserva.
+ */
+export async function updateEventTitle(grantId: string, calendarId: string, eventId: string, title: string) {
+  const qs = new URLSearchParams({ calendar_id: calendarId });
+  return nylas<{ data: { id: string } }>(`/v3/grants/${grantId}/events/${eventId}?${qs}`, {
+    method: "PUT",
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function deleteConfiguration(grantId: string, configId: string) {
   return nylas(configurationsPath(grantId, configId), { method: "DELETE" });
 }
