@@ -180,19 +180,20 @@ export function configurationVariants(full: ReturnType<typeof buildConfiguration
   ];
 }
 
-export async function upsertConfiguration(configId: string | null, body: object) {
-  if (configId) {
-    return nylas<{ data: { id: string } }>(`/v3/scheduling/configurations/${configId}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
-  }
-  return nylas<{ data: { id: string } }>(`/v3/scheduling/configurations`, {
-    method: "POST",
+/**
+ * Las configuraciones del Scheduler viven bajo el grant, no en la raíz:
+ * /v3/grants/{grant_id}/scheduling/configurations
+ */
+const configurationsPath = (grantId: string, configId?: string) =>
+  `/v3/grants/${grantId}/scheduling/configurations${configId ? `/${configId}` : ""}`;
+
+export async function upsertConfiguration(grantId: string, configId: string | null, body: object) {
+  return nylas<{ data: { id: string } }>(configurationsPath(grantId, configId ?? undefined), {
+    method: configId ? "PUT" : "POST",
     body: JSON.stringify(body),
   });
 }
 
-export async function deleteConfiguration(configId: string) {
-  return nylas(`/v3/scheduling/configurations/${configId}`, { method: "DELETE" });
+export async function deleteConfiguration(grantId: string, configId: string) {
+  return nylas(configurationsPath(grantId, configId), { method: "DELETE" });
 }

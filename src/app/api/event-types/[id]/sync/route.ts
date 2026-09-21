@@ -26,6 +26,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const specific = await sb.from("availability_rules").select("weekday,start_time,end_time").eq("event_type_id", id);
   const effective = (specific.data?.length ? specific.data : rules) as AvailabilityRule[];
 
+  const grantId = (conn as CalendarConnection).nylas_grant_id;
+
   // Modo diagnóstico: prueba el cuerpo por capas y devuelve en cuál falla.
   // Cada capa que Nylas acepta se borra al momento para no dejar basura.
   if (req.nextUrl.searchParams.get("diagnose")) {
@@ -33,9 +35,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const steps: { step: string; ok: boolean; error?: string; body?: object }[] = [];
     for (const variant of configurationVariants(full)) {
       try {
-        const res = await upsertConfiguration(null, variant.body);
+        const res = await upsertConfiguration(grantId, null, variant.body);
         steps.push({ step: variant.label, ok: true });
-        await deleteConfiguration(res.data.id).catch(() => {});
+        await deleteConfiguration(grantId, res.data.id).catch(() => {});
       } catch (err) {
         steps.push({ step: variant.label, ok: false, error: (err as Error).message, body: variant.body });
         break;
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const body = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective);
-    const res = await upsertConfiguration(et.nylas_configuration_id, body);
+    const res = await upsertConfiguration(grantId, et.nylas_configuration_id, body);
     await sb.from("event_types").update({ nylas_configuration_id: res.data.id }).eq("id", id);
     return NextResponse.json({ ok: true, configuration_id: res.data.id });
   } catch (e) {
