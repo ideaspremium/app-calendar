@@ -114,23 +114,51 @@ export default function BookingWidget({
   }
 
   const differentZones = guestTimezone !== businessTimezone;
+  // Con husos lejanos la cita puede caer en días distintos según la zona (22:00 en
+  // Madrid son las 4:00 del día siguiente en Hong Kong). Si pasa, hay que repetir la
+  // fecha en la nota o parece que la agencia la tiene otro día.
+  const sameCalendarDay =
+    !!booked &&
+    formatInTimeZone(booked.start, guestTimezone, { dateStyle: "short" }, locale) ===
+      formatInTimeZone(booked.start, businessTimezone, { dateStyle: "short" }, locale);
 
   return (
     <div style={style} className="w-full" ref={box}>
       {booked && (
-        <div className="mb-4 rounded-lg border border-black/10 bg-black/[0.02] px-4 py-3 text-sm">
-          <p className="font-medium">Cita confirmada</p>
-          <p className="mt-1">
-            {formatInTimeZone(booked.start, guestTimezone, { dateStyle: "full", timeStyle: "short" }, locale)}
-            {" · "}
-            <span className="opacity-70">tu hora, {zoneLabel(guestTimezone, booked.start, locale)}</span>
+        <div className="mb-4 rounded-lg border border-black/10 px-4 py-4">
+          <p className="text-xs uppercase tracking-wide opacity-60">Cita confirmada</p>
+
+          {/* Una sola hora protagonista: la del invitado. Si las dos zonas se
+              presentan con el mismo peso, se leen como dos citas distintas. */}
+          <p className="mt-1 text-lg font-semibold capitalize">
+            {formatInTimeZone(booked.start, guestTimezone, { dateStyle: "full" }, locale)}
           </p>
+          <p className="text-2xl font-bold tabular-nums">
+            {formatInTimeZone(booked.start, guestTimezone, { timeStyle: "short" }, locale)}
+            {" – "}
+            {formatInTimeZone(booked.end, guestTimezone, { timeStyle: "short" }, locale)}
+          </p>
+          <p className="mt-0.5 text-xs opacity-60">
+            tu hora · {zoneLabel(guestTimezone, booked.start, locale)}
+          </p>
+
           {differentZones && (
-            <p className="mt-0.5">
-              {formatInTimeZone(booked.start, businessTimezone, { dateStyle: "full", timeStyle: "short" }, locale)}
-              {" · "}
-              <span className="opacity-70">hora de {zoneLabel(businessTimezone, booked.start, locale)}</span>
-            </p>
+            <div className="mt-3 rounded-md bg-black/[0.04] px-3 py-2 text-xs opacity-70">
+              {/* Decir «la misma cita» explícitamente es lo que evita que se lea
+                  como una segunda reserva. */}
+              Es la misma cita. Hora de la agencia:{" "}
+              <span className="font-medium tabular-nums">
+                {sameCalendarDay
+                  ? formatInTimeZone(booked.start, businessTimezone, { timeStyle: "short" }, locale)
+                  : formatInTimeZone(
+                      booked.start,
+                      businessTimezone,
+                      { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" },
+                      locale
+                    )}
+              </span>{" "}
+              · {zoneLabel(businessTimezone, booked.start, locale)}
+            </div>
           )}
         </div>
       )}
