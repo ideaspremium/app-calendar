@@ -94,6 +94,11 @@ export default function BookingWidget({
     if (found) slot.current = found;
   };
 
+  const markBooked = (name: string) => {
+    noteEvent(name);
+    if (slot.current) setBooked(slot.current);
+  };
+
   const takeTimezone = (detail: unknown) => {
     noteEvent("timezoneChanged");
     if (typeof detail === "string" && isValidTimezone(detail)) setGuestTimezone(detail);
@@ -105,16 +110,24 @@ export default function BookingWidget({
 
     const onSlot = (e: Event) => takeSlot((e as CustomEvent).detail, "dom:" + e.type);
     const onTimezone = (e: Event) => takeTimezone((e as CustomEvent).detail);
+    const onBooked = (e: Event) => markBooked("dom:" + e.type);
 
     el.addEventListener("timeslotSelected", onSlot);
     el.addEventListener("timeslotConfirmed", onSlot);
     el.addEventListener("detailsConfirmed", onSlot);
     el.addEventListener("timezoneChanged", onTimezone);
+    // `bookedEventInfo` lo emite el componente padre, y el registro de
+    // `eventOverrides` es para las piezas internas: por ahi no llega. Este
+    // listener es el que de verdad lo recoge, porque el evento burbujea.
+    el.addEventListener("bookedEventInfo", onBooked);
+    el.addEventListener("bookingRefExtracted", onBooked);
     return () => {
       el.removeEventListener("timeslotSelected", onSlot);
       el.removeEventListener("timeslotConfirmed", onSlot);
       el.removeEventListener("detailsConfirmed", onSlot);
       el.removeEventListener("timezoneChanged", onTimezone);
+      el.removeEventListener("bookedEventInfo", onBooked);
+      el.removeEventListener("bookingRefExtracted", onBooked);
     };
     // Depende de `guestTimezone` a propósito: mientras no se resuelve, lo que hay
     // montado es el placeholder, que no lleva el ref. Con dependencias vacías el
@@ -198,8 +211,7 @@ eventos:       ${seenEvents.length ? seenEvents.join(", ") : "(ninguno)"}`}
           timeslotConfirmed: async (e) => takeSlot(e.detail, "override:timeslotConfirmed"),
           detailsConfirmed: async (e) => takeSlot(e.detail, "override:detailsConfirmed"),
           bookedEventInfo: async (e) => {
-            noteEvent("override:bookedEventInfo");
-            if (slot.current) setBooked(slot.current);
+            markBooked("override:bookedEventInfo");
             // Avisa a la página padre (embed) para analítica o redirección
             window.parent?.postMessage({ type: "premium-calendar:booked", detail: e.detail }, "*");
           },
