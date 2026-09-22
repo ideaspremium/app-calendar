@@ -9,6 +9,8 @@ Plataforma multi-agencia de reserva de citas 1 a 1. Next.js 15 + Supabase (eu-we
 - `/api/nylas/connect|callback` — OAuth vía Nylas.
 - `/api/nylas/webhook` — recibe `booking.*` y `grant.*` y los refleja en Supabase.
 - `/api/event-types/[id]/sync` — crea/actualiza la Scheduler Configuration en Nylas.
+- `/api/v1/*` — API servidor a servidor para integradores (Premium Chatbots): disponibilidad, crear, cancelar y reprogramar citas. Referencia completa en [`docs/api-v1.md`](docs/api-v1.md).
+- `/cita/[token]` — enlace estable para que el visitante cancele o reprograme una cita creada por la API.
 
 ## Puesta en marcha
 1. `npm install`

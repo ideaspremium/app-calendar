@@ -52,6 +52,9 @@ export default async function ClientDetail({
         <div>
           <Link href="/admin" className="text-sm opacity-60 hover:underline">← Clientes</Link>
           <h1 className="text-2xl font-semibold">{c.name}</h1>
+          <p className="text-xs opacity-60">
+            ID de calendario para la API: <code className="select-all">{c.id}</code>
+          </p>
         </div>
         <a href={publicUrl} target="_blank" className="rounded-lg border px-3 py-1.5 text-sm">Ver página pública</a>
       </header>
@@ -121,6 +124,7 @@ export default async function ClientDetail({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="font-medium">{t.name}</span> <span className="text-sm opacity-60">{t.duration_minutes} min · /{t.slug}</span>
+                  <span className="ml-2 text-xs opacity-50">ID: <code className="select-all">{t.id}</code></span>
                   {!t.nylas_configuration_id && <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Sin publicar</span>}
                 </div>
                 <div className="flex items-center gap-2">

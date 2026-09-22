@@ -1,5 +1,10 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import type { ApiKey } from "@/lib/api/auth";
+import { releaseAbandonedPending } from "@/lib/api/booking-flow";
+import type { BookingRow } from "@/lib/api/bookings";
+import { loadCalendar } from "@/lib/api/calendars";
+import { notifyIntegrator } from "@/lib/api/webhooks";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { updateEventTitle } from "@/lib/nylas";
 
@@ -150,50 +155,77 @@ export async function POST(req: NextRequest) {
 
     if (et && start && end && bookingId) {
       const guestName = String(guest.name ?? extra.name ?? "");
-      const { error: saveError } = await db.from("bookings").upsert(
-        {
-          nylas_booking_id: bookingId,
-          client_id: et.client_id,
-          event_type_id: et.id,
-          calendar_connection_id: et.calendar_connection_id,
-          start_at: start,
-          end_at: end,
-          invitee_name: guestName,
-          invitee_email: String(guest.email ?? answerOfType("email") ?? extra.email ?? ""),
-          invitee_phone: answerOfType("phone_number") ?? (extra.phone as string) ?? null,
-          invitee_timezone: String(bi.guest_timezone ?? d.timezone ?? "UTC"),
-          answers: extra,
-          status,
-          external_event_id: eventId ?? null,
-          meeting_url: location.startsWith("http") ? location : null,
-          cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
-          cancel_reason:
-            status === "cancelled"
-              ? ((d.cancellation_reason ?? bi.cancellation_reason ?? null) as string | null)
-              : null,
-          source: "web",
-        },
-        { onConflict: "nylas_booking_id" }
-      );
-      if (saveError) {
-        console.error("[webhook] no se pudo guardar la reserva:", saveError.message, "|", saveError.details ?? "");
-      } else {
-        console.log("[webhook] reserva guardada:", bookingId, "|", start, "→", end);
-      }
+      const guestEmail = String(guest.email ?? answerOfType("email") ?? extra.email ?? "");
+      const cancelReason =
+        status === "cancelled" ? ((d.cancellation_reason ?? bi.cancellation_reason ?? null) as string | null) : null;
 
-      // El título del evento lo pone Nylas sin el nombre de quien reserva, así que
-      // lo añadimos aquí: en la agenda del cliente se distingue una cita de otra.
-      if (status !== "cancelled" && eventId && guestName && conn?.nylas_grant_id) {
-        try {
-          await updateEventTitle(
-            conn.nylas_grant_id,
-            conn.external_calendar_id ?? "primary",
-            eventId,
-            `${et.name} — ${guestName}`
+      // Citas creadas por la API v1: tienen su propio camino (ver syncApiBooking).
+      const handledByApi = await syncApiBooking(db, {
+        type,
+        status,
+        bookingId,
+        clientId: et.client_id,
+        start,
+        end,
+        guestEmail,
+        eventId: eventId ?? null,
+        cancelReason,
+      });
+
+      if (!handledByApi) {
+        const upsert = () =>
+          db.from("bookings").upsert(
+            {
+              nylas_booking_id: bookingId,
+              client_id: et.client_id,
+              event_type_id: et.id,
+              calendar_connection_id: et.calendar_connection_id,
+              start_at: start,
+              end_at: end,
+              invitee_name: guestName,
+              invitee_email: guestEmail,
+              invitee_phone: answerOfType("phone_number") ?? (extra.phone as string) ?? null,
+              invitee_timezone: String(bi.guest_timezone ?? d.timezone ?? "UTC"),
+              answers: extra,
+              status,
+              external_event_id: eventId ?? null,
+              meeting_url: location.startsWith("http") ? location : null,
+              cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
+              cancel_reason: cancelReason,
+              source: "web",
+            },
+            { onConflict: "nylas_booking_id" }
           );
-        } catch (e) {
-          // Nunca romper el webhook por esto: la cita ya está guardada.
-          console.error("[webhook] no se pudo renombrar el evento:", (e as Error).message);
+        let { error: saveError } = await upsert();
+        // Solape con otra fila (restricción de exclusión): casi siempre es una reserva del
+        // chat para ese mismo hueco que todavía está en curso y que Nylas va a rechazar
+        // porque ha ganado la web. Se le da tiempo a liberarse antes de rendirse.
+        for (let attempt = 0; saveError?.code === "23P01" && attempt < 3; attempt++) {
+          const released = await releaseAbandonedPending(et.client_id, new Date(start), new Date(end));
+          if (!released) await new Promise((r) => setTimeout(r, 1500));
+          ({ error: saveError } = await upsert());
+        }
+        if (saveError) {
+          console.error("[webhook] no se pudo guardar la reserva:", saveError.message, "|", saveError.details ?? "");
+        } else {
+          console.log("[webhook] reserva guardada:", bookingId, "|", start, "→", end);
+        }
+
+        // El título del evento lo pone Nylas sin el nombre de quien reserva, así que
+        // lo añadimos aquí: en la agenda del cliente se distingue una cita de otra.
+        // (Las de la API las anota la propia API al crearlas.)
+        if (status !== "cancelled" && eventId && guestName && conn?.nylas_grant_id) {
+          try {
+            await updateEventTitle(
+              conn.nylas_grant_id,
+              conn.external_calendar_id ?? "primary",
+              eventId,
+              `${et.name} — ${guestName}`
+            );
+          } catch (e) {
+            // Nunca romper el webhook por esto: la cita ya está guardada.
+            console.error("[webhook] no se pudo renombrar el evento:", (e as Error).message);
+          }
         }
       }
     } else if (et && start && end && !bookingId) {
@@ -212,4 +244,91 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+const PLATFORM: ApiKey = { id: "", name: "webhook", agency_id: null };
+
+/**
+ * Refleja en la fila de una cita creada por la API lo que avisa Nylas. Devuelve true si
+ * la cita es de la API (y por tanto no debe pasar por el upsert genérico, que la
+ * sobrescribiría como «web» y borraría su clave de idempotencia).
+ *
+ *  - booking.created de una cita que la API acaba de crear y aún no ha enlazado: se
+ *    enlaza la fila `pending` (mismo cliente, misma hora, mismo email) con el id de Nylas.
+ *  - Cualquier aviso sobre una cita de la API ya enlazada: se actualizan hora y estado.
+ *    Si eso cambia algo, el cambio vino de fuera de la API (enlace del correo, por
+ *    ejemplo) y se avisa al integrador. Si no cambia nada, lo hizo la propia API.
+ */
+async function syncApiBooking(
+  db: ReturnType<typeof supabaseAdmin>,
+  a: {
+    type: string;
+    status: "cancelled" | "rescheduled" | "pending" | "confirmed";
+    bookingId: string;
+    clientId: string;
+    start: string;
+    end: string;
+    guestEmail: string;
+    eventId: string | null;
+    cancelReason: string | null;
+  }
+): Promise<boolean> {
+  const { data: existing } = await db.from("bookings").select("*").eq("nylas_booking_id", a.bookingId).maybeSingle();
+  let row = existing as BookingRow | null;
+
+  if (!row && a.type === "booking.created" && a.guestEmail) {
+    const { data: claimed } = await db
+      .from("bookings")
+      .update({ nylas_booking_id: a.bookingId, external_event_id: a.eventId, status: "confirmed" })
+      .eq("client_id", a.clientId)
+      .eq("source", "api")
+      .eq("status", "pending")
+      .is("nylas_booking_id", null)
+      .eq("start_at", a.start)
+      .eq("end_at", a.end)
+      .eq("invitee_email", a.guestEmail.toLowerCase())
+      .select("*")
+      .maybeSingle();
+    if (claimed) {
+      console.log("[webhook] cita de la API enlazada:", (claimed as BookingRow).id, "←", a.bookingId);
+      return true;
+    }
+  }
+  if (!row || row.source !== "api") return false;
+
+  const moved = Date.parse(row.start_at) !== Date.parse(a.start) || Date.parse(row.end_at) !== Date.parse(a.end);
+  const cancelledNow = a.status === "cancelled" && row.status !== "cancelled";
+  if (!moved && !cancelledNow) {
+    if (!row.external_event_id && a.eventId) {
+      await db.from("bookings").update({ external_event_id: a.eventId }).eq("id", row.id);
+    }
+    return true;
+  }
+
+  const patch: Record<string, unknown> = { start_at: a.start, end_at: a.end };
+  if (cancelledNow) {
+    Object.assign(patch, { status: "cancelled", cancelled_at: new Date().toISOString(), cancel_reason: a.cancelReason });
+  } else if (moved && row.status !== "cancelled") {
+    patch.status = "rescheduled";
+  }
+  if (a.eventId) patch.external_event_id = a.eventId;
+  const { data: updated, error } = await db.from("bookings").update(patch).eq("id", row.id).select("*").single();
+  if (error || !updated) {
+    console.error("[webhook] no se pudo actualizar la cita de la API:", error?.message);
+    return true;
+  }
+  row = updated as BookingRow;
+  console.log("[webhook] cita de la API cambiada fuera de la API:", row.id, a.type);
+
+  const outbound = cancelledNow ? "booking.cancelled" : "booking.rescheduled";
+  const saved = row;
+  after(async () => {
+    try {
+      const cal = await loadCalendar(PLATFORM, saved.client_id);
+      await notifyIntegrator(cal, saved, outbound);
+    } catch (e) {
+      console.error("[webhook saliente] no se pudo enviar:", (e as Error).message);
+    }
+  });
+  return true;
 }

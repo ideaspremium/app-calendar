@@ -28,10 +28,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const grantId = (conn as CalendarConnection).nylas_grant_id;
 
+  // Días completos cerrados (festivos, vacaciones) del cliente o de este tipo de cita.
+  const { data: closed } = await sb
+    .from("availability_overrides")
+    .select("date")
+    .eq("client_id", et.client_id)
+    .eq("is_blocked", true)
+    .is("start_time", null)
+    .or(`event_type_id.is.null,event_type_id.eq.${id}`)
+    .gte("date", new Date(Date.now() - 86_400_000).toISOString().slice(0, 10));
+  const blockedDates = [...new Set((closed ?? []).map((o) => o.date as string))].sort();
+
   // Modo diagnóstico: prueba el cuerpo por capas y devuelve en cuál falla.
   // Cada capa que Nylas acepta se borra al momento para no dejar basura.
   if (req.nextUrl.searchParams.get("diagnose")) {
-    const full = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective);
+    const full = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective, blockedDates);
     const steps: { step: string; ok: boolean; error?: string; body?: object }[] = [];
     for (const variant of configurationVariants(full)) {
       try {
@@ -47,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   try {
-    const body = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective);
+    const body = buildConfiguration(client as Client, et as EventType, conn as CalendarConnection, effective, blockedDates);
     const res = await upsertConfiguration(grantId, et.nylas_configuration_id, body);
     await sb.from("event_types").update({ nylas_configuration_id: res.data.id }).eq("id", id);
     return NextResponse.json({ ok: true, configuration_id: res.data.id });
