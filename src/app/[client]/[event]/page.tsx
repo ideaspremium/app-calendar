@@ -23,7 +23,7 @@ export default async function EventPage({
         schedulerApiUrl={NYLAS_SCHEDULER_API_URL}
         branding={client.branding}
         locale={client.locale}
-        timezone={client.timezone}
+        businessTimezone={client.timezone}
       />
     </ClientFrame>
   );

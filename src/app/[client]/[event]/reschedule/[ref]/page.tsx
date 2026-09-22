@@ -19,7 +19,7 @@ export default async function Page({ params }: { params: Promise<{ client: strin
         schedulerApiUrl={NYLAS_SCHEDULER_API_URL}
         branding={client.branding}
         locale={client.locale}
-        timezone={client.timezone}
+        businessTimezone={client.timezone}
         rescheduleBookingRef={ref}
       />
     </ClientFrame>
