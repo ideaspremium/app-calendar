@@ -68,39 +68,26 @@ export default function BookingWidget({
   // El hueco elegido se guarda en una ref porque llega por eventos del componente
   // antes de que se confirme la reserva.
   const slot = useRef<Slot | null>(null);
-  // Solo para diagnosticar con ?debug=1: que eventos han llegado de verdad.
-  const [seenEvents, setSeenEvents] = useState<string[]>([]);
-  const [debug, setDebug] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setGuestTimezone(detectTimezone() ?? businessTimezone);
-    try {
-      setDebug(new URLSearchParams(window.location.search).has("debug"));
-    } catch {
-      /* da igual: el diagnostico es opcional */
-    }
   }, [businessTimezone]);
 
   // Dos canales para lo mismo, a propósito. `eventOverrides` es el que Nylas
   // documenta; la escucha en el contenedor queda de respaldo por si el nombre de
   // algún evento cambia. Los overrides NO sustituyen el comportamiento normal:
   // en el código de Nylas, tras llamarlos sigue con `if (!event.defaultPrevented)`.
-  const noteEvent = (name: string) => setSeenEvents((prev) => (prev.includes(name) ? prev : [...prev, name]));
-
-  const takeSlot = (detail: unknown, name: string) => {
-    noteEvent(name);
+  const takeSlot = (detail: unknown) => {
     const found = readSlot(detail);
     if (found) slot.current = found;
   };
 
-  const markBooked = (name: string) => {
-    noteEvent(name);
+  const markBooked = () => {
     if (slot.current) setBooked(slot.current);
   };
 
   const takeTimezone = (detail: unknown) => {
-    noteEvent("timezoneChanged");
     if (typeof detail === "string" && isValidTimezone(detail)) setGuestTimezone(detail);
   };
 
@@ -108,9 +95,9 @@ export default function BookingWidget({
     const el = box.current;
     if (!el) return;
 
-    const onSlot = (e: Event) => takeSlot((e as CustomEvent).detail, "dom:" + e.type);
+    const onSlot = (e: Event) => takeSlot((e as CustomEvent).detail);
     const onTimezone = (e: Event) => takeTimezone((e as CustomEvent).detail);
-    const onBooked = (e: Event) => markBooked("dom:" + e.type);
+    const onBooked = () => markBooked();
 
     el.addEventListener("timeslotSelected", onSlot);
     el.addEventListener("timeslotConfirmed", onSlot);
@@ -188,16 +175,6 @@ export default function BookingWidget({
         </p>
       )}
 
-      {debug && (
-        <pre className="mb-3 overflow-x-auto rounded-md bg-black/[0.06] px-3 py-2 text-[10px] leading-relaxed">
-{`zona invitado: ${guestTimezone}
-zona negocio:  ${businessTimezone}
-hueco captado: ${slot.current ? slot.current.start.toISOString() : "(ninguno)"}
-reservado:     ${booked ? "si" : "no"}
-eventos:       ${seenEvents.length ? seenEvents.join(", ") : "(ninguno)"}`}
-        </pre>
-      )}
-
       <NylasScheduling
         configurationId={configurationId}
         schedulerApiUrl={schedulerApiUrl}
@@ -207,11 +184,11 @@ eventos:       ${seenEvents.length ? seenEvents.join(", ") : "(ninguno)"}`}
         cancelBookingRef={cancelBookingRef}
         defaultSchedulerState={{ selectedLanguage: locale, selectedTimezone: guestTimezone } as never}
         eventOverrides={{
-          timeslotSelected: async (e) => takeSlot(e.detail, "override:timeslotSelected"),
-          timeslotConfirmed: async (e) => takeSlot(e.detail, "override:timeslotConfirmed"),
-          detailsConfirmed: async (e) => takeSlot(e.detail, "override:detailsConfirmed"),
+          timeslotSelected: async (e) => takeSlot(e.detail),
+          timeslotConfirmed: async (e) => takeSlot(e.detail),
+          detailsConfirmed: async (e) => takeSlot(e.detail),
           bookedEventInfo: async (e) => {
-            markBooked("override:bookedEventInfo");
+            markBooked();
             // Avisa a la página padre (embed) para analítica o redirección
             window.parent?.postMessage({ type: "premium-calendar:booked", detail: e.detail }, "*");
           },
