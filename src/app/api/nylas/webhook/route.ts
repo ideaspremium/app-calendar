@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     const { data: et, error: etError } = configId
       ? await db
           .from("event_types")
-          .select("id, client_id, calendar_connection_id, name")
+          .select("id, client_id, calendar_connection_id, name, questions")
           .eq("nylas_configuration_id", configId)
           .maybeSingle()
       : { data: null, error: null };
@@ -133,6 +133,17 @@ export async function POST(req: NextRequest) {
       participants[0] ??
       ((d.guest as Json) ?? {});
 
+    // Las respuestas llegan con la clave que la agencia dio a cada pregunta
+    // (q1_telefono, q2_correo...), no con nombres fijos. El tipo de la pregunta
+    // es lo único estable, así que es por ahí por donde se localizan.
+    const questions = Array.isArray(et?.questions) ? (et.questions as Json[]) : [];
+    const answerOfType = (kind: string): string | null => {
+      const q = questions.find((x) => x.type === kind);
+      const key = typeof q?.key === "string" ? q.key : null;
+      const value = key ? extra[key] : undefined;
+      return typeof value === "string" && value.trim() ? value : null;
+    };
+
     const eventId = (bi.event_id ?? d.event_id ?? deepFind(d, "event_id")) as string | undefined;
     const location = typeof bi.location === "string" ? bi.location : "";
     const bookingId = (d.booking_id ?? d.id) as string | undefined;
@@ -148,8 +159,8 @@ export async function POST(req: NextRequest) {
           start_at: start,
           end_at: end,
           invitee_name: guestName,
-          invitee_email: String(guest.email ?? extra.email ?? ""),
-          invitee_phone: (extra.phone as string) ?? null,
+          invitee_email: String(guest.email ?? answerOfType("email") ?? extra.email ?? ""),
+          invitee_phone: answerOfType("phone_number") ?? (extra.phone as string) ?? null,
           invitee_timezone: String(bi.guest_timezone ?? d.timezone ?? "UTC"),
           answers: extra,
           status,
