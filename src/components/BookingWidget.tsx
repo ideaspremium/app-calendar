@@ -96,7 +96,10 @@ export default function BookingWidget({
       el.removeEventListener("detailsConfirmed", onSlot);
       el.removeEventListener("timezoneChanged", onTimezone);
     };
-  }, []);
+    // Depende de `guestTimezone` a propósito: mientras no se resuelve, lo que hay
+    // montado es el placeholder, que no lleva el ref. Con dependencias vacías el
+    // efecto se ejecutaba una sola vez, encontraba el ref vacío y no volvía nunca.
+  }, [guestTimezone]);
 
   const primary = branding.primary_color ?? "#2563eb";
   const style = {
@@ -124,42 +127,24 @@ export default function BookingWidget({
 
   return (
     <div style={style} className="w-full" ref={box}>
-      {booked && (
-        <div className="mb-4 rounded-lg border border-black/10 px-4 py-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Cita confirmada</p>
-
-          {/* Una sola hora protagonista: la del invitado. Si las dos zonas se
-              presentan con el mismo peso, se leen como dos citas distintas. */}
-          <p className="mt-1 text-lg font-semibold capitalize">
-            {formatInTimeZone(booked.start, guestTimezone, { dateStyle: "full" }, locale)}
-          </p>
-          <p className="text-2xl font-bold tabular-nums">
-            {formatInTimeZone(booked.start, guestTimezone, { timeStyle: "short" }, locale)}
-            {" – "}
-            {formatInTimeZone(booked.end, guestTimezone, { timeStyle: "short" }, locale)}
-          </p>
-          <p className="mt-0.5 text-xs opacity-60">
-            tu hora · {zoneLabel(guestTimezone, booked.start, locale)}
-          </p>
-
-          {differentZones && (
-            <div className="mt-3 rounded-md bg-black/[0.04] px-3 py-2 text-xs opacity-70">
-              {/* Decir «la misma cita» explícitamente es lo que evita que se lea
-                  como una segunda reserva. */}
-              Es la misma cita. Hora de la agencia:{" "}
-              <span className="font-medium tabular-nums">
-                {sameCalendarDay
-                  ? formatInTimeZone(booked.start, businessTimezone, { timeStyle: "short" }, locale)
-                  : formatInTimeZone(
-                      booked.start,
-                      businessTimezone,
-                      { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" },
-                      locale
-                    )}
-              </span>{" "}
-              · {zoneLabel(businessTimezone, booked.start, locale)}
-            </div>
-          )}
+      {/* La tarjeta de Nylas ya da la fecha y la hora en grande y en la zona del
+          invitado, así que aquí solo falta la equivalencia en la del negocio.
+          Repetir la fecha arriba haría que la página dijera «confirmada» dos veces
+          con la misma hora dos veces, que es justo la confusión que se quería evitar. */}
+      {booked && differentZones && (
+        <div className="mb-3 rounded-md border border-black/10 bg-black/[0.04] px-3 py-2 text-xs opacity-80">
+          La misma cita en la zona de la agencia:{" "}
+          <span className="font-medium tabular-nums">
+            {sameCalendarDay
+              ? formatInTimeZone(booked.start, businessTimezone, { timeStyle: "short" }, locale)
+              : formatInTimeZone(
+                  booked.start,
+                  businessTimezone,
+                  { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" },
+                  locale
+                )}
+          </span>{" "}
+          · {zoneLabel(businessTimezone, booked.start, locale)}
         </div>
       )}
 
