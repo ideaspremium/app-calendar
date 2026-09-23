@@ -5,7 +5,11 @@ Plataforma multi-agencia de reserva de citas 1 a 1. Next.js 15 + Supabase (eu-we
 ## Estructura
 - `/[client]` y `/[client]/[event]` — páginas públicas de reserva con branding por cliente. `?embed=1` quita el marco para uso en iframe.
 - `/embed.js` — script de una línea para embeber (inline o popup) en la web del cliente.
-- `/admin` — panel de agencia: clientes, conexión de calendarios (Nylas Hosted Auth), horarios, tipos de cita, imagen, código de embed.
+- `/admin` — panel de agencia (en la interfaz, los `clients` se llaman **negocios**):
+  - Inicio (resumen y pendientes), Citas (filtros, horas en tu zona o en la de cada negocio, ficha y CSV).
+  - Negocios, con pestañas Resumen, Datos, Calendario y horario (días cerrados incluidos), Servicios, Imagen (estilo clásico o vidrio, logo subido) y Compartir.
+  - Equipo (invitar por correo, papeles) y Ajustes de la agencia.
+  - Necesita la migración [`docs/migraciones/2026-09-23-panel-agencias.sql`](docs/migraciones/2026-09-23-panel-agencias.sql) (funciones del equipo y espacio `logos`).
 - `/api/nylas/connect|callback` — OAuth vía Nylas.
 - `/api/nylas/webhook` — recibe `booking.*` y `grant.*` y los refleja en Supabase.
 - `/api/event-types/[id]/sync` — crea/actualiza la Scheduler Configuration en Nylas.
@@ -27,5 +31,7 @@ Plataforma multi-agencia de reserva de citas 1 a 1. Next.js 15 + Supabase (eu-we
    Para ser super admin de todas las agencias: en Auth → Users → tu usuario → `app_metadata` añade `{"platform_admin": true}`.
 7. `npm run dev` y entra en `/admin/login`.
 
-## Flujo por cliente
-Conectar calendario → definir horario → crear tipo de cita → Publicar → copiar link o embed.
+## Flujo por negocio
+Conectar calendario → definir horario → crear servicio → Publicar → copiar enlace o embed.
+
+`GOOGLE_OAUTH_VERIFIED=1` en Vercel quita el aviso de «app de Google en modo de prueba» que ve la plataforma en Inicio.

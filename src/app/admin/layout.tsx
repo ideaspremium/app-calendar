@@ -1,24 +1,46 @@
-import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/server";
-import { signOut } from "./actions";
+import "@fontsource-variable/inter";
+import "@/styles/admin.css";
+import type { Metadata } from "next";
+import Shell from "@/components/admin/Shell";
+import { getAdminContext, ROLE_LABEL } from "@/lib/admin/context";
+import { LIVE_STATUSES } from "@/lib/admin/data";
+
+export const metadata: Metadata = { title: "Panel · Premium Calendar", robots: { index: false, follow: false } };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
+  const ctx = await getAdminContext();
+  // Sin sesión solo se llega a la pantalla de acceso (el middleware manda ahí el resto).
+  if (!ctx) return <div className="adm">{children}</div>;
+
+  let clients = 0;
+  let upcoming = 0;
+  if (ctx.agency) {
+    const now = new Date();
+    const [{ count: nClients }, { count: nUpcoming }] = await Promise.all([
+      ctx.sb.from("clients").select("id", { count: "exact", head: true }).eq("agency_id", ctx.agency.id),
+      ctx.sb
+        .from("bookings")
+        .select("id, clients!inner(agency_id)", { count: "exact", head: true })
+        .eq("clients.agency_id", ctx.agency.id)
+        .in("status", LIVE_STATUSES)
+        .gte("start_at", now.toISOString())
+        .lt("start_at", new Date(now.getTime() + 7 * 86_400_000).toISOString()),
+    ]);
+    clients = nClients ?? 0;
+    upcoming = nUpcoming ?? 0;
+  }
+
   return (
-    <div className="min-h-screen">
-      <nav className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/admin" className="font-semibold">Premium Calendar</Link>
-          {user && (
-            <form action={signOut} className="flex items-center gap-3 text-sm">
-              <span className="opacity-60">{user.email}</span>
-              <button className="underline">Salir</button>
-            </form>
-          )}
-        </div>
-      </nav>
-      <div className="mx-auto max-w-5xl px-4 py-8">{children}</div>
-    </div>
+    <Shell
+      email={ctx.user.email}
+      agencies={ctx.agencies.map((a) => ({ id: a.id, name: a.name, timezone: a.timezone }))}
+      current={ctx.agency ? { id: ctx.agency.id, name: ctx.agency.name, timezone: ctx.agency.timezone, clients } : null}
+      isPlatform={ctx.isPlatform}
+      roleLabel={ctx.member ? ROLE_LABEL[ctx.role] : "Plataforma"}
+      upcoming={upcoming}
+      deviceTz={ctx.deviceTz}
+    >
+      {children}
+    </Shell>
   );
 }

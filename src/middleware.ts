@@ -19,6 +19,10 @@ export async function middleware(req: NextRequest) {
   if (path.startsWith("/admin") && !path.startsWith("/admin/login") && !user) {
     return NextResponse.redirect(new URL("/admin/login", req.url));
   }
+  // Con sesión, la pantalla de acceso no tiene nada que hacer (y saldría dentro del panel).
+  if (path.startsWith("/admin/login") && user) {
+    return NextResponse.redirect(new URL("/admin", req.url));
+  }
   return res;
 }
 

@@ -1,208 +1,279 @@
-import { appUrl } from "@/lib/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Field } from "@/components/Field";
-import CopyBlock from "@/components/CopyBlock";
-import SyncButton from "@/components/SyncButton";
-import SubmitButton from "@/components/SubmitButton";
-import QuestionsEditor from "@/components/QuestionsEditor";
-import { TimezoneSelect, isValidTimezone } from "@/components/TimezoneSelect";
-import { zoneLabel } from "@/lib/datetime";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requireAgency } from "@/lib/admin/context";
+import { BOOKING_SELECT, LIVE_STATUSES, readiness, type BookingRow } from "@/lib/admin/data";
+import { dayShort, hm, isoDayIn, zl } from "@/lib/admin/time";
+import { appUrl } from "@/lib/config";
 import type { AvailabilityRule, CalendarConnection, Client, EventType } from "@/lib/types";
-import { deleteEventType, saveAvailability, saveEventType, updateBranding } from "../../actions";
+import { isValidZone } from "@/lib/zones";
+import { StatusPill } from "@/components/admin/bits";
+import { CopyButton, Notice } from "@/components/admin/ui";
+import { I } from "@/components/admin/icons";
+import DataForm from "@/components/admin/negocio/DataForm";
+import HoursEditor from "@/components/admin/negocio/HoursEditor";
+import ClosedDays from "@/components/admin/negocio/ClosedDays";
+import Services from "@/components/admin/negocio/Services";
+import ImageEditor from "@/components/admin/negocio/ImageEditor";
+import Share from "@/components/admin/negocio/Share";
 
-const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const ORDER = [1, 2, 3, 4, 5, 6, 0];
+const TABS = [
+  ["resumen", "Resumen"],
+  ["datos", "Datos"],
+  ["calendario", "Calendario y horario"],
+  ["servicios", "Servicios"],
+  ["imagen", "Imagen"],
+  ["compartir", "Compartir"],
+] as const;
+type Tab = (typeof TABS)[number][0];
 
-const SAVED_NOTICES: Record<string, string> = {
-  horario: "Horario de atención guardado.",
-  cita_nueva: "Tipo de cita creado. Pulsa «Publicar» para aplicarlo en Nylas.",
-  cita: "Cambios del tipo de cita guardados. Pulsa «Publicar» para aplicarlos en Nylas.",
-  desactivada: "Tipo de cita desactivado.",
-  datos: "Datos e imagen del cliente guardados.",
-};
-
-export default async function ClientDetail({
-  params, searchParams,
-}: { params: Promise<{ id: string }>; searchParams: Promise<{ connected?: string; edit?: string; saved?: string }> }) {
+export default async function Negocio({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; connected?: string; creado?: string; edit?: string; nuevo?: string }>;
+}) {
   const { id } = await params;
-  const { connected, edit, saved } = await searchParams;
-  const sb = await supabaseServer();
-  const { data: client } = await sb.from("clients").select("*").eq("id", id).maybeSingle();
-  if (!client) notFound();
-  const c = client as Client;
+  const sp = await searchParams;
+  const ctx = await requireAgency();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  const { data: row } = await ctx.sb.from("clients").select("*").eq("id", id).maybeSingle();
+  if (!row) notFound();
+  const c = { ...(row as Client), branding: (row as Client).branding ?? {} } as Client & { contact_email: string | null; website_url: string | null };
+  const tz = isValidZone(c.timezone) ? c.timezone : "UTC";
+  const today = isoDayIn(tz);
 
-  const [{ data: conns }, { data: types }, { data: rules }] = await Promise.all([
-    sb.from("calendar_connections").select("*").eq("client_id", id).order("created_at"),
-    sb.from("event_types").select("*").eq("client_id", id).eq("is_active", true).order("name"),
-    sb.from("availability_rules").select("weekday,start_time,end_time").eq("client_id", id).is("event_type_id", null).order("weekday"),
+  const [{ data: conns }, { data: types }, { data: rules }, { data: overrides }, { data: next }] = await Promise.all([
+    ctx.sb.from("calendar_connections").select("*").eq("client_id", id).order("created_at"),
+    ctx.sb.from("event_types").select("*").eq("client_id", id).eq("is_active", true).order("name"),
+    ctx.sb.from("availability_rules").select("weekday,start_time,end_time").eq("client_id", id).is("event_type_id", null).order("weekday").order("start_time"),
+    ctx.sb.from("availability_overrides").select("id,date,note,start_time,end_time,event_type_id").eq("client_id", id).gte("date", today).order("date"),
+    ctx.sb.from("bookings").select(BOOKING_SELECT).eq("client_id", id).in("status", LIVE_STATUSES).gte("start_at", new Date().toISOString()).order("start_at").limit(5),
   ]);
   const connections = (conns ?? []) as CalendarConnection[];
-  const eventTypes = (types ?? []) as EventType[];
-  const byDay = new Map<number, AvailabilityRule[]>();
-  (rules as AvailabilityRule[] | null)?.forEach((r) => byDay.set(r.weekday, [...(byDay.get(r.weekday) ?? []), r]));
-  const editing = eventTypes.find((t) => t.id === edit);
+  const services = (types ?? []) as EventType[];
+  const hours = (rules ?? []) as AvailabilityRule[];
+  const closed = (overrides ?? []) as { id: string; date: string; note: string | null; start_time: string | null; event_type_id: string | null }[];
+  const upcoming = (next ?? []) as unknown as BookingRow[];
+  const r = readiness({ calendar_connections: connections, availability_rules: hours, event_types: services, timezone: c.timezone });
+
+  const tab: Tab = (TABS.find(([k]) => k === sp.tab)?.[0] ?? "resumen") as Tab;
   const base = appUrl();
-  const publicUrl = c.custom_domain ? `https://${c.custom_domain}` : `${base}/${c.slug}`;
+  const pageUrl = c.custom_domain ? `https://${c.custom_domain}` : `${base}/${c.slug}`;
+  const pageLabel = pageUrl.replace(/^https?:\/\//, "");
 
   return (
-    <div className="space-y-10">
-      <header className="flex items-center justify-between">
+    <>
+      <Link className="crumb" href="/admin/clients">{I.left}Negocios</Link>
+      <div className="hd" style={{ marginBottom: 14 }}>
         <div>
-          <Link href="/admin" className="text-sm opacity-60 hover:underline">← Clientes</Link>
-          <h1 className="text-2xl font-semibold">{c.name}</h1>
-          <p className="text-xs opacity-60">
-            ID de calendario para la API: <code className="select-all">{c.id}</code>
-          </p>
+          <h1>{c.name}</h1>
+          <p>{pageLabel}</p>
         </div>
-        <a href={publicUrl} target="_blank" className="rounded-lg border px-3 py-1.5 text-sm">Ver página pública</a>
-      </header>
+        <div className="acts">
+          <CopyButton text={pageUrl} label="Copiar enlace" className="btn sec" />
+          <a className="btn sec" href={pageUrl} target="_blank" rel="noreferrer">{I.ext}Ver página</a>
+        </div>
+      </div>
 
-      {connected && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">Calendario conectado correctamente.</p>}
-      {saved && SAVED_NOTICES[saved] && (
-        <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">{SAVED_NOTICES[saved]}</p>
+      {sp.connected && <Notice kind="ok">Calendario conectado. Si ya tenías servicios publicados, vuelve a publicarlos para que usen esta cuenta.</Notice>}
+      {sp.creado && <Notice kind="ok">Negocio creado. Siguiente paso: conectar su calendario y poner su horario.</Notice>}
+      {!isValidZone(c.timezone) && (
+        <Notice kind="bad">
+          «{c.timezone}» no es una zona horaria válida, así que Nylas la ignora y calcula las horas en UTC. Corrígela en <Link href="?tab=datos" style={{ textDecoration: "underline" }}>Datos</Link>.
+        </Notice>
       )}
 
-      {/* 1. Calendarios conectados */}
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="mb-1 text-lg font-semibold">1. Calendario conectado</h2>
-        <p className="mb-4 text-sm opacity-70">La cuenta de Google, Microsoft u otra donde se crearán las citas y se consultará la disponibilidad.</p>
-        <ul className="mb-4 divide-y">
-          {connections.map((k) => (
-            <li key={k.id} className="flex items-center justify-between py-2 text-sm">
-              <span><strong>{k.account_email}</strong> <span className="opacity-60">({k.provider})</span></span>
-              <span className={k.status === "active" ? "text-green-700" : "text-red-600"}>{k.status === "active" ? "Activo" : "Requiere reconexión"}</span>
-            </li>
-          ))}
-        </ul>
-        <form action="/api/nylas/connect" method="get" className="flex gap-2">
-          <input type="hidden" name="client_id" value={c.id} />
-          <input name="email" type="email" placeholder="correo de la cuenta a conectar (opcional)" className="flex-1 rounded-lg border px-3 py-2 text-sm" />
-          <button className="rounded-lg bg-black px-4 py-2 text-sm text-white">Conectar calendario</button>
-        </form>
-      </section>
+      <nav className="tabs" aria-label="Secciones del negocio">
+        {TABS.map(([k, l]) => (
+          <Link key={k} href={`?tab=${k}`} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} scroll={false}>
+            {l}
+          </Link>
+        ))}
+      </nav>
 
-      {/* 2. Horario */}
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="mb-1 text-lg font-semibold">2. Horario de atención</h2>
-        <p className="mb-4 text-sm opacity-70">
-          Estas horas son la hora local de <strong>{zoneLabel(c.timezone)}</strong>, la zona del cliente. Puedes añadir un segundo tramo (por ejemplo, tarde).
-        </p>
-        {!isValidTimezone(c.timezone) && (
-          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            «{c.timezone}» no es una zona horaria válida, así que Nylas la ignora y trata estas horas como UTC:
-            los horarios y los correos saldrán desplazados. Corrígela en la sección 4 y vuelve a pulsar «Actualizar en Nylas».
-          </p>
-        )}
-        <form action={saveAvailability} className="space-y-2">
-          <input type="hidden" name="client_id" value={c.id} />
-          {ORDER.map((d) => {
-            const r = byDay.get(d) ?? [];
-            return (
-              <div key={d} className="grid grid-cols-[110px_auto_auto_auto_auto_auto] items-center gap-2 text-sm">
-                <label className="flex items-center gap-2"><input type="checkbox" name={`on_${d}`} defaultChecked={r.length > 0} /> {DAYS[d]}</label>
-                <input type="time" name={`start_${d}`} defaultValue={r[0]?.start_time.slice(0, 5) ?? "09:00"} className="rounded border px-2 py-1" />
-                <input type="time" name={`end_${d}`} defaultValue={r[0]?.end_time.slice(0, 5) ?? "14:00"} className="rounded border px-2 py-1" />
-                <span className="opacity-50">y</span>
-                <input type="time" name={`start2_${d}`} defaultValue={r[1]?.start_time.slice(0, 5) ?? ""} className="rounded border px-2 py-1" />
-                <input type="time" name={`end2_${d}`} defaultValue={r[1]?.end_time.slice(0, 5) ?? ""} className="rounded border px-2 py-1" />
+      {tab === "resumen" && (
+        <div className="stack">
+          <section className="card">
+            <div className="ch">
+              <div>
+                <h2>Puesta en marcha</h2>
+                <p>Cuando los cuatro estén en verde, el negocio puede recibir reservas.</p>
               </div>
-            );
-          })}
-          <div className="mt-2"><SubmitButton>Guardar horario</SubmitButton></div>
-        </form>
-      </section>
-
-      {/* 3. Tipos de cita */}
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="mb-1 text-lg font-semibold">3. Tipos de cita</h2>
-        <p className="mb-4 text-sm opacity-70">Cada tipo de cita tiene su propia página y su propio código de embed. Tras guardar o cambiar el horario, pulsa «Publicar» para que Nylas lo aplique.</p>
-        <ul className="mb-6 divide-y">
-          {eventTypes.map((t) => (
-            <li key={t.id} className="py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            </div>
+            <div className="cb steps">
+              <Step ok={r.calendar === "ok"} title="Calendario" sub={r.calendar === "ok" ? `${connections.find((k) => k.status === "active")?.provider === "microsoft" ? "Outlook" : "Google"} · activo` : r.calendar === "reconnect" ? "Necesita reconexión" : "Sin conectar"} href="?tab=calendario" />
+              <Step ok={r.hours} title="Horario" sub={r.hours ? summaryHours(hours) : "Sin definir"} href="?tab=calendario" />
+              <Step ok={r.published > 0} title="Servicios" sub={r.services ? `${r.published} de ${r.services} publicados` : "Ninguno"} href="?tab=servicios" />
+              <Step ok title="Imagen" sub={c.branding.style === "vidrio" ? "Estilo vidrio" : "Estilo clásico"} href="?tab=imagen" />
+            </div>
+          </section>
+          <div className="grid2">
+            <section className="card">
+              <div className="ch">
                 <div>
-                  <span className="font-medium">{t.name}</span> <span className="text-sm opacity-60">{t.duration_minutes} min · /{t.slug}</span>
-                  <span className="ml-2 text-xs opacity-50">ID: <code className="select-all">{t.id}</code></span>
-                  {!t.nylas_configuration_id && <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Sin publicar</span>}
+                  <h2>Próximas citas</h2>
+                  <p>Horas de {zl(tz)}, la zona del negocio</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <SyncButton eventTypeId={t.id} hasConfig={!!t.nylas_configuration_id} />
-                  <Link href={`?edit=${t.id}`} className="rounded-lg border px-3 py-1.5 text-sm">Editar</Link>
-                  <form action={deleteEventType}><input type="hidden" name="id" value={t.id} /><input type="hidden" name="client_id" value={c.id} />
-                    <SubmitButton pendingLabel="Desactivando…" className="rounded-lg border px-3 py-1.5 text-sm text-red-700">Desactivar</SubmitButton></form>
+                <Link className="btn ghost sm" href={`/admin/citas?negocio=${c.id}`}>Ver todas {I.right}</Link>
+              </div>
+              <div className="cb list">
+                {upcoming.length === 0 && <p className="empty">Todavía no hay citas próximas.</p>}
+                {upcoming.map((b) => (
+                  <Link className="it" key={b.id} href={`/admin/citas?cita=${b.id}&negocio=${c.id}&zona=negocio`}>
+                    <div className="when">
+                      <b>{hm(b.start_at, tz)}</b>
+                      <small>{dayShort(b.start_at, tz)}</small>
+                    </div>
+                    <div className="who">
+                      <b>{b.invitee_name}</b>
+                      <small>{b.event_types?.name}</small>
+                    </div>
+                    <StatusPill status={b.status} />
+                  </Link>
+                ))}
+              </div>
+            </section>
+            <section className="card">
+              <div className="ch">
+                <div>
+                  <h2>Para la API</h2>
+                  <p>Identificadores que usa Premium Chatbots.</p>
                 </div>
               </div>
-              {t.nylas_configuration_id && (
-                <details className="mt-2 text-sm">
-                  <summary className="cursor-pointer opacity-70">Link y código de embed</summary>
-                  <div className="mt-2 space-y-2">
-                    <p>Link para compartir: <a className="underline" href={`${publicUrl}/${t.slug}`} target="_blank">{publicUrl}/{t.slug}</a></p>
-                    <p className="opacity-70">Embebido en la web (inline):</p>
-                    <CopyBlock code={`<script src="${base}/embed.js" data-client="${c.slug}" data-event="${t.slug}"></script>`} />
-                    <p className="opacity-70">Botón flotante que abre el calendario:</p>
-                    <CopyBlock code={`<script src="${base}/embed.js" data-client="${c.slug}" data-event="${t.slug}" data-mode="popup" data-label="Reservar cita" data-color="${c.branding.primary_color ?? "#2563eb"}"></script>`} />
+              <div className="cb ids">
+                <div>
+                  <label>ID de calendario del negocio</label>
+                  <div className="copyrow">
+                    <span className="inp mono">{c.id}</span>
+                    <CopyButton text={c.id} label="" className="btn sec sm ico" />
                   </div>
-                </details>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <form action={saveEventType} className="grid gap-3 rounded-lg bg-neutral-50 p-4 sm:grid-cols-2">
-          <h3 className="font-medium sm:col-span-2">{editing ? `Editar: ${editing.name}` : "Nuevo tipo de cita"}</h3>
-          <input type="hidden" name="client_id" value={c.id} />
-          {editing && <input type="hidden" name="id" value={editing.id} />}
-          <Field label="Nombre" name="name" required defaultValue={editing?.name} />
-          <Field label="Slug (URL)" name="slug" defaultValue={editing?.slug} placeholder="auto" />
-          <label className="block text-sm sm:col-span-2">Descripción
-            <textarea name="description" defaultValue={editing?.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2" rows={2} />
-          </label>
-          <label className="block text-sm sm:col-span-2">Calendario donde se crea la cita
-            <select name="calendar_connection_id" defaultValue={editing?.calendar_connection_id ?? connections[0]?.id ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2" required>
-              {connections.map((k) => <option key={k.id} value={k.id}>{k.account_email}</option>)}
-            </select>
-          </label>
-          <Field label="Duración (min)" name="duration_minutes" type="number" defaultValue={editing?.duration_minutes ?? 30} />
-          <Field label="Intervalo entre horas ofrecidas (min)" name="slot_interval_minutes" type="number" defaultValue={editing?.slot_interval_minutes ?? 30} />
-          <Field label="Margen antes (min)" name="buffer_before_minutes" type="number" defaultValue={editing?.buffer_before_minutes ?? 0} />
-          <Field label="Margen después (min)" name="buffer_after_minutes" type="number" defaultValue={editing?.buffer_after_minutes ?? 0} />
-          <Field label="Antelación mínima (horas)" name="min_notice_hours" type="number" defaultValue={editing ? editing.min_notice_minutes / 60 : 2} />
-          <Field label="Reservas hasta (días adelante)" name="max_days_ahead" type="number" defaultValue={editing?.max_days_ahead ?? 60} />
-          <label className="block text-sm">Modalidad
-            <select name="location_type" defaultValue={editing?.location_type ?? "in_person"} className="mt-1 w-full rounded-lg border px-3 py-2">
-              <option value="in_person">Presencial</option><option value="phone">Teléfono</option><option value="video">Videollamada</option><option value="custom">Otra</option>
-            </select>
-          </label>
-          <Field label="Dirección / detalle de ubicación" name="location_details" defaultValue={editing?.location_details ?? ""} />
-          <QuestionsEditor key={editing?.id ?? "nueva"} initial={editing?.questions} />
-          <div className="flex items-center gap-2 sm:col-span-2">
-            <SubmitButton>{editing ? "Guardar cambios" : "Crear tipo de cita"}</SubmitButton>
-            {editing && <Link href={`/admin/clients/${c.id}`} className="rounded-lg border px-4 py-2 text-sm">Cancelar</Link>}
+                </div>
+                {services.map((s) => (
+                  <div key={s.id}>
+                    <label>Servicio «{s.name}»</label>
+                    <div className="copyrow">
+                      <span className="inp mono">{s.id}</span>
+                      <CopyButton text={s.id} label="" className="btn sec sm ico" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
-        </form>
-      </section>
+        </div>
+      )}
 
-      {/* 4. Imagen */}
-      <section className="rounded-xl border bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">4. Datos e imagen del cliente</h2>
-        <form action={updateBranding} className="grid gap-3 sm:grid-cols-2">
-          <input type="hidden" name="id" value={c.id} />
-          <Field label="Nombre" name="name" defaultValue={c.name} />
-          <TimezoneSelect value={c.timezone} />
-          <Field label="Correo de contacto" name="contact_email" defaultValue={(client as { contact_email?: string }).contact_email ?? ""} />
-          <Field label="Web del cliente" name="website_url" defaultValue={(client as { website_url?: string }).website_url ?? ""} />
-          <Field label="Dominio propio (citas.cliente.com)" name="custom_domain" defaultValue={c.custom_domain ?? ""} />
-          <Field label="URL del logo" name="logo_url" defaultValue={c.branding.logo_url ?? ""} />
-          <Field label="Color principal" name="primary_color" type="color" defaultValue={c.branding.primary_color ?? "#2563eb"} />
-          <Field label="Fondo" name="background" type="color" defaultValue={c.branding.background ?? "#ffffff"} />
-          <Field label="Texto" name="text_color" type="color" defaultValue={c.branding.text_color ?? "#17181c"} />
-          <Field label="Tipografía (CSS)" name="font_family" defaultValue={c.branding.font_family ?? ""} />
-          <div className="flex items-center sm:col-span-2"><SubmitButton>Guardar</SubmitButton>
-            <span className="ml-3 text-sm opacity-60">Los cambios de imagen se aplican al instante; el nombre y el logo también van a Nylas al volver a publicar.</span></div>
-        </form>
-      </section>
-    </div>
+      {tab === "datos" && (
+        <DataForm
+          canEdit={ctx.canManage}
+          host={base.replace(/^https?:\/\//, "")}
+          client={{
+            id: c.id, name: c.name, slug: c.slug, timezone: c.timezone, locale: c.locale,
+            contact_email: c.contact_email ?? "", website_url: c.website_url ?? "", custom_domain: c.custom_domain ?? "",
+          }}
+        />
+      )}
+
+      {tab === "calendario" && (
+        <div className="grid2 g12">
+          <div className="stack">
+            <section className="card">
+              <div className="ch">
+                <div>
+                  <h2>Calendario conectado</h2>
+                  <p>Donde se crean las citas y se miran los huecos ocupados.</p>
+                </div>
+              </div>
+              <div className="cb stack" style={{ gap: 14 }}>
+                {connections.map((k) => (
+                  <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", boxShadow: "inset 0 0 0 1px var(--line)", flex: "none" }}>
+                      {k.provider === "google" ? I.google : I.cal}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <b>{k.provider === "google" ? "Google Calendar" : k.provider === "microsoft" ? "Outlook" : k.provider}</b>
+                      <div style={{ fontSize: 13, color: "var(--muted)", overflowWrap: "anywhere" }}>{k.account_email}</div>
+                    </div>
+                    {k.status === "active" ? <span className="pill p-ok">{I.check}Activo</span> : <span className="pill p-bad">{I.warn}Requiere reconexión</span>}
+                    <form action="/api/nylas/connect" method="get">
+                      <input type="hidden" name="client_id" value={c.id} />
+                      <input type="hidden" name="email" value={k.account_email} />
+                      <button className="btn sec sm">Reconectar</button>
+                    </form>
+                  </div>
+                ))}
+                <form action="/api/nylas/connect" method="get" className="row2">
+                  <input type="hidden" name="client_id" value={c.id} />
+                  {connections.length === 0 && (
+                    <input name="email" type="email" className="inp" style={{ flex: "1 1 220px" }} placeholder="Correo de la cuenta (opcional)" aria-label="Correo de la cuenta a conectar" />
+                  )}
+                  <button className={connections.length ? "btn ghost sm" : "btn pri"}>
+                    {connections.length ? <>{I.plus}Conectar otra cuenta</> : <>{I.google}Conectar Google</>}
+                  </button>
+                </form>
+                {connections.length === 0 && <small className="hint">Se abre la pantalla de Google para dar permiso. Outlook, más adelante.</small>}
+              </div>
+            </section>
+            <HoursEditor clientId={c.id} zoneLabel={zl(tz)} initial={hours.map((h) => ({ weekday: h.weekday, start: h.start_time.slice(0, 5), end: h.end_time.slice(0, 5) }))} />
+          </div>
+          <ClosedDays clientId={c.id} today={today} items={closed.filter((o) => !o.event_type_id && !o.start_time).map((o) => ({ id: o.id, date: o.date, note: o.note }))} />
+        </div>
+      )}
+
+      {tab === "servicios" && (
+        <Services
+          client={{ id: c.id, slug: c.slug, brand: c.branding.primary_color || "#5b3fe0", pageUrl }}
+          connections={connections.map((k) => ({ id: k.id, email: k.account_email, active: k.status === "active" }))}
+          services={services}
+          editId={sp.edit ?? null}
+          startNew={!!sp.nuevo}
+        />
+      )}
+
+      {tab === "imagen" && (
+        <ImageEditor
+          canEdit={ctx.canManage}
+          client={{ id: c.id, name: c.name, branding: c.branding }}
+          sample={services.find((s) => s.nylas_configuration_id) ?? services[0] ?? null}
+          previewUrl={services.find((s) => s.nylas_configuration_id) ? `${pageUrl}/${services.find((s) => s.nylas_configuration_id)!.slug}` : pageUrl}
+        />
+      )}
+
+      {tab === "compartir" && (
+        <Share
+          base={base}
+          pageUrl={pageUrl}
+          client={{ slug: c.slug, brand: c.branding.primary_color || "#5b3fe0" }}
+          services={services.filter((s) => s.nylas_configuration_id).map((s) => ({ name: s.name, slug: s.slug }))}
+        />
+      )}
+    </>
   );
+}
+
+function Step({ ok, title, sub, href }: { ok: boolean; title: string; sub: string; href: string }) {
+  return (
+    <Link className="step" href={href} scroll={false}>
+      <span className={`ic ${ok ? "ok" : "warn"}`}>{ok ? I.check : I.warn}</span>
+      <div>
+        {title}
+        <small>{sub}</small>
+      </div>
+    </Link>
+  );
+}
+
+const SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+/** «Lun–Vie · 09:00–15:00» o, si no es tan regular, los días que abre. */
+function summaryHours(rules: AvailabilityRule[]): string {
+  const byDay = new Map<number, string>();
+  for (const r of rules) byDay.set(r.weekday, `${byDay.get(r.weekday) ? byDay.get(r.weekday) + ", " : ""}${r.start_time.slice(0, 5)}–${r.end_time.slice(0, 5)}`);
+  const days = [1, 2, 3, 4, 5, 6, 0].filter((d) => byDay.has(d));
+  if (!days.length) return "Sin definir";
+  const first = byDay.get(days[0])!;
+  const same = days.every((d) => byDay.get(d) === first);
+  const run = days.length > 1 && days.every((d, i) => i === 0 || [1, 2, 3, 4, 5, 6, 0].indexOf(d) === [1, 2, 3, 4, 5, 6, 0].indexOf(days[i - 1]) + 1);
+  const label = run ? `${SHORT[days[0]]}–${SHORT[days[days.length - 1]]}` : days.map((d) => SHORT[d]).join(", ");
+  return same ? `${label} · ${first}` : `${label} · horario variable`;
 }
