@@ -196,16 +196,19 @@ export function buildTheme(branding: Branding, style: PageStyle, font: string): 
   }
   const inkDark = fromLch(Math.max(0, kl - 0.07), kc, kh);
 
-  // Seleccionado en vidrio: el tono de texto al 14 % sobre blanco, con el texto ajustado a 4,5:1.
-  let selInk = ink;
-  {
-    const under = over(ink, 0.14);
+  // Texto sobre el tono de texto al `alpha` % sobre blanco, oscurecido hasta 4,5:1.
+  const inkOver = (alpha: number) => {
+    const under = over(ink, alpha);
+    let out = ink;
     let [l] = toLch(ink);
-    for (let i = 0; i < 40 && contrast(selInk, under) < 4.5; i++) {
+    for (let i = 0; i < 40 && contrast(out, under) < 4.5; i++) {
       l -= 0.01;
-      selInk = fromLch(l, kc, kh);
+      out = fromLch(l, kc, kh);
     }
-  }
+    return out;
+  };
+  // Seleccionado en vidrio: el tono de texto al 14 %.
+  const selInk = inkOver(0.14);
 
   const vars: Record<string, string> = {
     "--pc-brand": brand,
@@ -236,6 +239,16 @@ export function buildTheme(branding: Branding, style: PageStyle, font: string): 
     "--pc-sel-halo": rgba(ink, 0.12),
     "--pc-tint-a": rgba(fromLch(0.86, Math.min(brandC, 0.12), brandH), 0.55),
     "--pc-ring": rgba(ink, 0.55),
+    // Días del calendario en vidrio: los libres casi blancos con un borde de color, para que
+    // se distingan del vidrio claro; el elegido, más teñido (su texto va ajustado a ese fondo).
+    "--pc-day-bg": rgba(ink, 0.1),
+    "--pc-day-rim": rgba(ink, 0.3),
+    "--pc-day-lift": rgba(fromLch(0.35, Math.min(brandC, 0.12), brandH), 0.38),
+    "--pc-day-sel-bg": rgba(ink, 0.3),
+    "--pc-day-sel-rim": rgba(ink, 0.75),
+    "--pc-day-sel-halo": rgba(ink, 0.16),
+    "--pc-day-sel-ink": inkOver(0.3),
+    "--pc-slot-rim": rgba(ink, 0.24),
     "--pc-muted": glass ? mix(text, "#ffffff", 0.72) : n(0.68),
     "--pc-faint": glass ? mix(text, "#ffffff", 0.38) : n(0.3),
   };

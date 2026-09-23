@@ -214,33 +214,34 @@ html:has(.pc[data-embedded="true"]) body { background: transparent; }
   background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(255,255,255,.42));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.6), 0 6px 16px -8px var(--pc-glow);
 }
+/* Días libres: casi blancos con un borde de color, para que se vean sobre el vidrio claro. */
 .pc[data-style="vidrio"] nylas-scheduling::part(ndp__date) {
   width: 46px; height: 46px; border-radius: 50%; color: var(--pc-ink); font-weight: 700;
-  background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.5));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.55), 0 6px 14px -8px var(--pc-glow);
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.6)), var(--pc-day-bg);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1.5px var(--pc-day-rim), 0 1px 2px rgba(20,10,40,.06), 0 8px 16px -10px var(--pc-day-lift);
   transition: transform .15s ease, box-shadow .15s ease;
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ndp__date):enabled:hover {
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255,255,255,.8), 0 0 0 2px var(--pc-ring), 0 10px 18px -8px var(--pc-glow);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1.5px var(--pc-day-rim), 0 0 0 2px var(--pc-ring), 0 10px 18px -8px var(--pc-glow);
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ndp__date):disabled { background: transparent; box-shadow: none; color: var(--pc-faint); font-weight: 500; }
 .pc[data-style="vidrio"] nylas-scheduling::part(ndp__date--selected),
 .pc[data-style="vidrio"] nylas-scheduling::part(ndp__date--selected):enabled:hover {
-  transform: none; color: var(--pc-sel-ink); font-weight: 800;
-  background: linear-gradient(180deg, rgba(255,255,255,.70) 0%, rgba(255,255,255,.18) 48%, rgba(255,255,255,.05) 100%), var(--pc-sel-bg);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1.5px var(--pc-sel-rim), 0 0 0 4px var(--pc-sel-halo), 0 10px 22px -10px var(--pc-glow-ink);
+  transform: none; color: var(--pc-day-sel-ink); font-weight: 800;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 48%, rgba(255,255,255,0) 100%), var(--pc-day-sel-bg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 2px var(--pc-day-sel-rim), 0 0 0 4px var(--pc-day-sel-halo), 0 10px 22px -10px var(--pc-glow-ink);
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslots) { padding: 6px 14px; }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslot) {
   position: relative; height: 50px; border-radius: 999px; outline: none; color: var(--pc-text); font-weight: 600;
   background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.46));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.6), 0 6px 16px -8px var(--pc-glow), 0 1px 2px rgba(20,10,40,.06);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1.5px var(--pc-slot-rim), 0 6px 16px -8px var(--pc-glow), 0 1px 2px rgba(20,10,40,.06);
   transition: transform .15s ease, box-shadow .15s ease;
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslot):hover {
   transform: translateY(-1px); color: var(--pc-ink);
-  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255,255,255,.8), 0 0 0 2px var(--pc-ring), 0 10px 18px -8px var(--pc-glow);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1.5px var(--pc-slot-rim), 0 0 0 2px var(--pc-ring), 0 10px 18px -8px var(--pc-glow);
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslot):focus-visible { outline: 2px solid var(--pc-ink); outline-offset: 2px; }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslot--selected),
