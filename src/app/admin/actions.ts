@@ -97,6 +97,9 @@ export async function createClient(form: FormData) {
 export async function updateBranding(form: FormData) {
   const sb = await supabaseServer();
   const id = String(form.get("id"));
+  // La imagen guarda más cosas que las que edita este formulario (estilo de la página,
+  // fondo del vidrio, radio): se conservan en vez de sobrescribirlas.
+  const { data: current } = await sb.from("clients").select("branding").eq("id", id).maybeSingle();
   const { error } = await sb.from("clients").update({
     name: String(form.get("name")),
     timezone: String(form.get("timezone")),
@@ -104,6 +107,7 @@ export async function updateBranding(form: FormData) {
     website_url: String(form.get("website_url") || "") || null,
     custom_domain: String(form.get("custom_domain") || "") || null,
     branding: {
+      ...((current?.branding as Record<string, unknown> | null) ?? {}),
       logo_url: String(form.get("logo_url") || "") || undefined,
       primary_color: String(form.get("primary_color") || "") || undefined,
       background: String(form.get("background") || "") || undefined,

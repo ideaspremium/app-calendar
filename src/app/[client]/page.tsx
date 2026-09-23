@@ -1,40 +1,62 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
-import ClientFrame from "@/components/ClientFrame";
+import { notFound, redirect } from "next/navigation";
+import ClientFrame, { publicTheme } from "@/components/ClientFrame";
+import { Icon } from "@/components/public/icons";
+import { T, asLang } from "@/lib/public-texts";
 import { getPublicClient, getPublicEventTypes } from "@/lib/public";
 
 export default async function ClientPage({
   params, searchParams,
-}: { params: Promise<{ client: string }>; searchParams: Promise<{ embed?: string }> }) {
+}: { params: Promise<{ client: string }>; searchParams: Promise<{ embed?: string; estilo?: string; lang?: string }> }) {
   const { client: slug } = await params;
-  const { embed } = await searchParams;
+  const search = await searchParams;
   const host = (await headers()).get("host");
   const client = await getPublicClient(slug, host);
   if (!client) notFound();
   const types = await getPublicEventTypes(client.id);
 
+  const keep = new URLSearchParams();
+  if (search.embed === "1") keep.set("embed", "1");
+  if (search.estilo) keep.set("estilo", search.estilo);
+  if (search.lang) keep.set("lang", search.lang);
+  const qs = keep.toString() ? `?${keep}` : "";
+
+  // Con un solo servicio, la lista sobra: se entra directo a reservar.
+  if (types.length === 1) redirect(`/${client.slug}/${types[0].slug}${qs}`);
+
+  const t = T[asLang(search.lang ?? client.locale)];
   return (
-    <ClientFrame branding={client.branding} name={client.name} embedded={embed === "1"}>
-      <div className="p-6">
-        <h1 className="mb-1 text-2xl font-semibold">Reserva tu cita</h1>
-        <p className="mb-6 opacity-70">Elige el tipo de cita para ver los horarios disponibles.</p>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {types.map((t) => (
-            <li key={t.id}>
-              <Link
-                href={`/${client.slug}/${t.slug}${embed === "1" ? "?embed=1" : ""}`}
-                className="block rounded-xl border p-4 transition hover:shadow-sm"
-                style={{ borderColor: "var(--brand)" }}
-              >
-                <div className="font-medium">{t.name}</div>
-                <div className="text-sm opacity-70">{t.duration_minutes} min{t.description ? ` · ${t.description}` : ""}</div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-        {types.length === 0 && <p>No hay citas disponibles por el momento.</p>}
+    <ClientFrame
+      branding={client.branding}
+      name={client.name}
+      embedded={search.embed === "1"}
+      theme={publicTheme(client.branding, search.estilo)}
+      width="narrow"
+    >
+      <div className="pc-lhead">
+        <h1>{t.chooseService}</h1>
+        <p>{t.chooseServiceSub}</p>
       </div>
+      {types.length === 0 ? (
+        <p className="pc-empty">{t.noServices}</p>
+      ) : (
+        <div className="pc-svcs">
+          {types.map((s) => (
+            <Link key={s.id} href={`/${client.slug}/${s.slug}${qs}`} className="pc-svc pc-g2">
+              <span className="pc-svc-bar" />
+              <span className="pc-svc-body">
+                <span className="pc-svc-title">{s.name}</span>
+                <span className="pc-svc-meta" style={{ display: "block" }}>
+                  {t.minutes(s.duration_minutes)} · {s.location_details || t.location[s.location_type] || t.location.in_person}
+                </span>
+                {s.description && <span className="pc-svc-desc">{s.description}</span>}
+              </span>
+              <span className="pc-svc-arrow">{Icon.right}</span>
+            </Link>
+          ))}
+        </div>
+      )}
     </ClientFrame>
   );
 }

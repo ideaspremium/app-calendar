@@ -5,6 +5,10 @@ export type Branding = {
   text_color?: string;
   font_family?: string;     // ej. "Inter, sans-serif"
   radius?: string;          // ej. "8px"
+  /** Estilo de la página pública. Sin valor = clásico. */
+  style?: "clasico" | "vidrio";
+  /** Fondo del estilo vidrio: solo el color principal o hasta 3 colores elegidos. */
+  glass?: { mode?: "brand" | "custom"; colors?: string[]; intensity?: "soft" | "vivid" };
 };
 
 export type Client = {
