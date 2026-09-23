@@ -180,6 +180,17 @@ html:has(.pc[data-embedded="true"]) body { background: transparent; }
 .pc nylas-scheduling::part(ndp__title) { display: none; }
 .pc[data-style="clasico"] nylas-scheduling { border-radius: 0 calc(var(--pc-radius) * 2) calc(var(--pc-radius) * 2) 0; background: var(--pc-bg); overflow: hidden; }
 .pc[data-style="clasico"] nylas-scheduling::part(ns_right-panel) { border-bottom-right-radius: calc(var(--pc-radius) * 2); }
+/* Fecha sobre las horas. Nylas la pone en una fila flexible sin margen lateral, así que las
+   fechas largas («Miércoles, 30 de septiembre de 2026») llegaban al borde. Ahora hay 16 px a
+   cada lado y, si no cabe, pasa a dos líneas equilibradas con el icono pegado al texto. */
+.pc nylas-scheduling::part(ns_right-panel__title) {
+  display: block; height: auto; min-height: 48px; padding: 12px 16px; line-height: 24px; text-align: center; text-wrap: balance;
+}
+.pc nylas-scheduling::part(ns_right-panel__calendar-icon) { display: inline-block; vertical-align: -2px; margin-right: 8px; }
+.pc nylas-scheduling::part(ns_right-panel__selected-date) { overflow-wrap: anywhere; }
+/* Nylas deja la barra de desplazamiento siempre visible (en Windows sale con flechas aunque
+   haya una sola hora): solo aparece si hace falta, y fina. */
+.pc nylas-scheduling::part(ntp__timeslots) { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--pc-n300) transparent; }
 
 @media (min-width: 769px) {
   .pc nylas-scheduling { width: 100%; }
