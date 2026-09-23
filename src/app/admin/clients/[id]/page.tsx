@@ -15,6 +15,7 @@ import ClosedDays from "@/components/admin/negocio/ClosedDays";
 import Services from "@/components/admin/negocio/Services";
 import ImageEditor from "@/components/admin/negocio/ImageEditor";
 import Share from "@/components/admin/negocio/Share";
+import LinkPending from "@/components/admin/LinkPending";
 
 const TABS = [
   ["resumen", "Resumen"],
@@ -64,7 +65,7 @@ export default async function Negocio({
 
   return (
     <>
-      <Link className="crumb" href="/admin/clients">{I.left}Negocios</Link>
+      <Link className="crumb" href="/admin/clients">{I.left}Negocios<LinkPending /></Link>
       <div className="hd" style={{ marginBottom: 14 }}>
         <div>
           <h1>{c.name}</h1>
@@ -88,6 +89,7 @@ export default async function Negocio({
         {TABS.map(([k, l]) => (
           <Link key={k} href={`?tab=${k}`} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined} scroll={false}>
             {l}
+            <LinkPending />
           </Link>
         ))}
       </nav>
@@ -115,7 +117,7 @@ export default async function Negocio({
                   <h2>Próximas citas</h2>
                   <p>Horas de {zl(tz)}, la zona del negocio</p>
                 </div>
-                <Link className="btn ghost sm" href={`/admin/citas?negocio=${c.id}`}>Ver todas {I.right}</Link>
+                <Link className="btn ghost sm" href={`/admin/citas?negocio=${c.id}`}>Ver todas {I.right}<LinkPending /></Link>
               </div>
               <div className="cb list">
                 {upcoming.length === 0 && <p className="empty">Todavía no hay citas próximas.</p>}
@@ -130,6 +132,7 @@ export default async function Negocio({
                       <small>{b.event_types?.name}</small>
                     </div>
                     <StatusPill status={b.status} />
+                    <LinkPending />
                   </Link>
                 ))}
               </div>
@@ -260,6 +263,7 @@ function Step({ ok, title, sub, href }: { ok: boolean; title: string; sub: strin
         {title}
         <small>{sub}</small>
       </div>
+      <LinkPending />
     </Link>
   );
 }

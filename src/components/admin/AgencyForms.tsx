@@ -22,7 +22,6 @@ export function AgencySettings({ agency, canEdit }: { agency: Agency; canEdit: b
   const [v, setV] = useState(agency);
   const [msg, setMsg] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
   const set = (k: keyof Agency) => (val: string) => setV((s) => ({ ...s, [k]: val }));
 
   return (
@@ -34,10 +33,9 @@ export function AgencySettings({ agency, canEdit }: { agency: Agency; canEdit: b
         setMsg(null);
         start(async () => {
           const r = await updateAgency(v);
-          if (r.ok) {
-            setMsg({ kind: "ok", text: "Ajustes guardados." });
-            router.refresh();
-          } else setMsg({ kind: "bad", text: r.error });
+          // La acción ya devuelve la página actualizada (revalidatePath): no hace falta recargar.
+          if (r.ok) setMsg({ kind: "ok", text: "Ajustes guardados." });
+          else setMsg({ kind: "bad", text: r.error });
         });
       }}
     >
@@ -96,7 +94,6 @@ export function NewAgency({ timezone }: { timezone: string }) {
           const r = await createAgency({ name, timezone: tz });
           if (!r.ok) return setErr(r.error);
           router.push("/admin/equipo");
-          router.refresh();
         });
       }}
     >

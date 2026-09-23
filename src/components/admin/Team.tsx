@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { inviteMember, removeMember, resendInvite, setMemberRole } from "@/app/admin/actions";
 import { I } from "./icons";
@@ -14,17 +13,15 @@ const color = (s: string) => COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0),
 function Row({ p, isOwner, canManage, onMsg }: { p: Person; isOwner: boolean; canManage: boolean; onMsg: (m: { kind: "ok" | "bad"; text: string }) => void }) {
   const [pending, start] = useTransition();
   const [sure, setSure] = useState(false);
-  const router = useRouter();
   const [bg, fg] = color(p.email);
   const canRemove = isOwner || (canManage && p.pending && p.role !== "owner");
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) =>
     start(async () => {
       const r = await fn();
-      if (r.ok) {
-        onMsg({ kind: "ok", text: ok });
-        router.refresh();
-      } else onMsg({ kind: "bad", text: (r as { error: string }).error });
+      // Las acciones ya devuelven la página actualizada (revalidatePath): no hace falta recargar.
+      if (r.ok) onMsg({ kind: "ok", text: ok });
+      else onMsg({ kind: "bad", text: (r as { error: string }).error });
       setSure(false);
     });
 
@@ -96,7 +93,6 @@ export function InviteForm({ canInviteOwner }: { canInviteOwner: boolean }) {
   const [role, setRole] = useState<"admin" | "member" | "owner">("member");
   const [msg, setMsg] = useState<{ kind: "ok" | "bad" | "warn"; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
 
   function send(e: React.FormEvent) {
     e.preventDefault();
@@ -109,7 +105,6 @@ export function InviteForm({ canInviteOwner }: { canInviteOwner: boolean }) {
       else if (r.mailError) setMsg({ kind: "warn", text: `La invitación está creada, pero el correo no salió (${r.mailError}). Pide a la persona que entre desde la pantalla de acceso con ${email}, o revisa el correo saliente de Supabase.` });
       else setMsg({ kind: "ok", text: `Invitación enviada a ${email}.` });
       setEmail("");
-      router.refresh();
     });
   }
 

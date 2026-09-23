@@ -5,6 +5,7 @@ import { zl } from "@/lib/admin/time";
 import { isValidZone } from "@/lib/zones";
 import { ClientTile, Empty } from "@/components/admin/bits";
 import { I } from "@/components/admin/icons";
+import LinkPending from "@/components/admin/LinkPending";
 
 export const metadata = { title: "Negocios · Premium Calendar" };
 
@@ -28,6 +29,7 @@ export default async function Negocios() {
         {ctx.canManage && (
           <Link className="btn pri" href="/admin/clients/new">
             {I.plus}Nuevo negocio
+            <LinkPending />
           </Link>
         )}
       </div>
@@ -79,12 +81,13 @@ export default async function Negocios() {
                     {upcoming.get(c.id) ?? "—"}
                   </div>
                 </div>
+                <LinkPending />
               </Link>
             );
           })}
           {ctx.canManage && (
             <Link href="/admin/clients/new" className="card cc new">
-              <span>{I.plus}Nuevo negocio</span>
+              <span>{I.plus}Nuevo negocio<LinkPending /></span>
             </Link>
           )}
         </div>

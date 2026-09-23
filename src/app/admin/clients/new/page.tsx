@@ -5,6 +5,7 @@ import { createClient } from "../../actions";
 import SubmitButton from "@/components/SubmitButton";
 import { Notice, ZoneField } from "@/components/admin/ui";
 import { I } from "@/components/admin/icons";
+import LinkPending from "@/components/admin/LinkPending";
 
 export const metadata = { title: "Nuevo negocio · Premium Calendar" };
 
@@ -16,7 +17,7 @@ export default async function NuevoNegocio({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <Link className="crumb" href="/admin/clients">{I.left}Negocios</Link>
+      <Link className="crumb" href="/admin/clients">{I.left}Negocios<LinkPending /></Link>
       <div className="hd">
         <div>
           <h1>Nuevo negocio</h1>

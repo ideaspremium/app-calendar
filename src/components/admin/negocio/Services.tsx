@@ -83,9 +83,11 @@ export default function Services({
   const [editing, setEditing] = useState<EventType | "new" | null>(() => (startNew ? "new" : services.find((s) => s.id === editId) ?? null));
   const [flash, setFlash] = useState<string | null>(null);
 
-  const close = () => {
+  /** Cierra el cajón. Si la dirección traía ?edit= o ?nuevo=, se limpia (y esa navegación ya trae la página al día). */
+  const close = (reload = false) => {
     setEditing(null);
     if (editId || startNew) router.replace("?tab=servicios", { scroll: false });
+    else if (reload) router.refresh();
   };
 
   return (
@@ -142,11 +144,12 @@ export default function Services({
           clientId={client.id}
           connections={connections}
           service={editing === "new" ? null : editing}
-          onClose={close}
-          onSaved={(text) => {
+          onClose={() => close()}
+          onSaved={(text, afterSync) => {
+            // Guardar ya devuelve la página actualizada (revalidatePath). Solo hace falta recargar
+            // si después se publicó en Nylas, que es una ruta aparte y cambia «Publicado».
             setFlash(text);
-            close();
-            router.refresh();
+            close(afterSync);
           }}
         />
       )}
@@ -155,7 +158,7 @@ export default function Services({
 }
 
 function Editor({ clientId, connections, service, onClose, onSaved }: {
-  clientId: string; connections: Conn[]; service: EventType | null; onClose: () => void; onSaved: (text: string) => void;
+  clientId: string; connections: Conn[]; service: EventType | null; onClose: () => void; onSaved: (text: string, afterSync: boolean) => void;
 }) {
   const [v, setV] = useState({
     name: service?.name ?? "",
@@ -194,9 +197,9 @@ function Editor({ clientId, connections, service, onClose, onSaved }: {
       if (publish && v.calendar_connection_id) {
         const p = await sync(r.id);
         if (!p.ok) return setErr(`Guardado, pero Nylas no lo aceptó: ${p.text}`);
-        return onSaved(`«${v.name}» guardado y publicado.`);
+        return onSaved(`«${v.name}» guardado y publicado.`, true);
       }
-      onSaved(`«${v.name}» guardado.${v.calendar_connection_id ? " Recuerda publicarlo para que cambie en su página." : ""}`);
+      onSaved(`«${v.name}» guardado.${v.calendar_connection_id ? " Recuerda publicarlo para que cambie en su página." : ""}`, false);
     });
   }
 
@@ -206,7 +209,7 @@ function Editor({ clientId, connections, service, onClose, onSaved }: {
     start(async () => {
       const r = await deactivateService(clientId, service.id);
       if (!r.ok) return setErr(r.error);
-      onSaved(`«${service.name}» desactivado.`);
+      onSaved(`«${service.name}» desactivado.`, false);
     });
   }
 

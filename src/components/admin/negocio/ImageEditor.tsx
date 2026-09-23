@@ -9,7 +9,6 @@ import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/600.css";
 import "@fontsource/lato/400.css";
 import "@fontsource/lato/700.css";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateClientImage, type ImageInput } from "@/app/admin/actions";
 import { supabaseBrowser } from "@/lib/supabase/browser";
@@ -81,7 +80,6 @@ export default function ImageEditor({ client, sample, previewUrl, canEdit }: {
   const [over, setOver] = useState(false);
   const [pending, start] = useTransition();
   const file = useRef<HTMLInputElement>(null);
-  const router = useRouter();
   const set = <K extends keyof ImageInput>(k: K, val: ImageInput[K]) => { setV((s) => ({ ...s, [k]: val })); setMsg(null); };
   const dirty = JSON.stringify(v) !== JSON.stringify(saved);
 
@@ -118,7 +116,6 @@ export default function ImageEditor({ client, sample, previewUrl, canEdit }: {
       const r = await updateClientImage(client.id, v);
       if (!r.ok) return setMsg({ kind: "bad", text: r.error });
       setMsg({ kind: "ok", text: "Imagen guardada. La página ya la usa." });
-      router.refresh();
     });
   }
 

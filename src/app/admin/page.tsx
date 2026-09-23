@@ -6,6 +6,7 @@ import { dayShort, hm, LOCALE, monthStartUtc, zl } from "@/lib/admin/time";
 import { formatInTimeZone } from "@/lib/datetime";
 import { ClientTile, StatusPill } from "@/components/admin/bits";
 import { I } from "@/components/admin/icons";
+import LinkPending from "@/components/admin/LinkPending";
 
 type Todo = { tone: "bad" | "warn" | "info"; title: React.ReactNode; sub: string; href?: string; cta?: string };
 
@@ -87,6 +88,7 @@ export default async function Inicio() {
         {ctx.canManage && (
           <Link className="btn pri" href="/admin/clients/new">
             {I.plus}Nuevo negocio
+            <LinkPending />
           </Link>
         )}
       </div>
@@ -129,6 +131,7 @@ export default async function Inicio() {
             </div>
             <Link className="btn ghost sm" href="/admin/citas">
               Ver todas {I.right}
+              <LinkPending />
             </Link>
           </div>
           <div className="cb list">
@@ -146,6 +149,7 @@ export default async function Inicio() {
                   </small>
                 </div>
                 <StatusPill status={b.status} />
+                <LinkPending />
               </Link>
             ))}
           </div>
@@ -177,6 +181,7 @@ export default async function Inicio() {
                 {t.href && (
                   <Link className="btn sec sm" href={t.href}>
                     {t.cta}
+                    <LinkPending />
                   </Link>
                 )}
               </div>
@@ -191,6 +196,7 @@ export default async function Inicio() {
             <Link key={c.id} href={`/admin/clients/${c.id}`} className="btn sec" style={{ height: 44, paddingLeft: 6 }}>
               <ClientTile name={c.name} branding={c.branding} size={32} />
               {c.name}
+              <LinkPending />
             </Link>
           ))}
         </div>

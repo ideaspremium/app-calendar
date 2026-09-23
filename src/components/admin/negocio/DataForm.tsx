@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateClientData } from "@/app/admin/actions";
 import { Notice, ZoneField } from "../ui";
@@ -10,7 +9,6 @@ export default function DataForm({ client, host, canEdit }: { client: Data; host
   const [v, setV] = useState(client);
   const [msg, setMsg] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const router = useRouter();
   const set = (k: keyof Data) => (e: React.ChangeEvent<HTMLInputElement>) => setV((s) => ({ ...s, [k]: e.target.value }));
   const slugChanged = v.slug.trim() !== client.slug;
 
@@ -22,7 +20,6 @@ export default function DataForm({ client, host, canEdit }: { client: Data; host
       if (r.ok) {
         setMsg({ kind: "ok", text: "Datos guardados." });
         setV((s) => ({ ...s, slug: r.slug }));
-        router.refresh();
       } else setMsg({ kind: "bad", text: r.error });
     });
   }

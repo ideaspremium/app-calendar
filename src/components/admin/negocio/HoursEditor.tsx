@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveAvailability } from "@/app/admin/actions";
 import { I } from "../icons";
@@ -41,7 +40,6 @@ export default function HoursEditor({ clientId, zoneLabel, initial }: { clientId
   const [dirty, setDirty] = useState(false);
   const [pending, start] = useTransition();
   const pub = useRepublish();
-  const router = useRouter();
 
   const edit = (d: number, fn: (r: Range[]) => Range[]) => {
     setDirty(true);
@@ -57,7 +55,6 @@ export default function HoursEditor({ clientId, zoneLabel, initial }: { clientId
       if (!r.ok) return setMsg({ kind: "bad", text: r.error });
       setDirty(false);
       setMsg({ kind: "ok", text: r.republish.length ? "Horario guardado. Los servicios publicados se actualizan con el horario nuevo." : "Horario guardado." });
-      router.refresh();
       await pub.run(r.republish);
     });
   }

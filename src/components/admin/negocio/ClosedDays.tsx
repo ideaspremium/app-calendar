@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { addClosedDays, removeClosedDays } from "@/app/admin/actions";
 import { calendarDay, daysBetween } from "@/lib/admin/time";
@@ -36,7 +35,6 @@ export default function ClosedDays({ clientId, today, items }: { clientId: strin
   const [msg, setMsg] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const pub = useRepublish();
-  const router = useRouter();
   const count = from ? daysBetween(from, to || from).length : 0;
 
   function add(e: React.FormEvent) {
@@ -49,7 +47,6 @@ export default function ClosedDays({ clientId, today, items }: { clientId: strin
       setTo("");
       setNote("");
       setMsg({ kind: "ok", text: count === 1 ? "Día cerrado añadido." : `${count} días cerrados añadidos.` });
-      router.refresh();
       await pub.run(r.republish);
     });
   }
@@ -60,7 +57,6 @@ export default function ClosedDays({ clientId, today, items }: { clientId: strin
       const r = await removeClosedDays(clientId, g.ids);
       if (!r.ok) return setMsg({ kind: "bad", text: r.error });
       setMsg({ kind: "ok", text: "Cierre quitado: esos días vuelven a tener horas." });
-      router.refresh();
       await pub.run(r.republish);
     });
   }

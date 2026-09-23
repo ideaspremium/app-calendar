@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOut, switchAgency } from "@/app/admin/actions";
 import { I, initials } from "./icons";
 import { cityName, isValidZone } from "@/lib/zones";
+import LinkPending, { FormPending } from "./LinkPending";
 
 type AgencyItem = { id: string; name: string; timezone: string };
 
@@ -88,6 +89,7 @@ function AgencySwitch({ agencies, current, isPlatform, compact = false }: { agen
                 {a.id === current.id && I.check}
               </button>
             ))}
+            <FormPending />
           </form>
           {isPlatform && (
             <>
@@ -129,6 +131,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
               {n.icon}
               {n.label}
               {n.href === "/admin/citas" && upcoming > 0 && <span className="cnt" title="Próximas citas en 7 días">{upcoming}</span>}
+              <LinkPending />
             </Link>
           ))}
         </nav>
@@ -140,6 +143,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
           </div>
           <form action={signOut}>
             <button type="submit">Salir</button>
+            <FormPending />
           </form>
         </div>
       </aside>
@@ -160,6 +164,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
           <Link key={n.href} href={n.href} className={n.match(path) ? "on" : ""} aria-current={n.match(path) ? "page" : undefined}>
             {n.icon}
             {n.label}
+            <LinkPending />
           </Link>
         ))}
         <button type="button" className={more || NAV.slice(3).some((n) => n.match(path)) ? "on" : ""} onClick={() => setMore((m) => !m)} aria-expanded={more}>
@@ -175,6 +180,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
               <Link key={n.href} href={n.href} role="menuitem">
                 {n.icon}
                 {n.label}
+                <LinkPending />
               </Link>
             ))}
             <form action={signOut}>
@@ -182,6 +188,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
                 {I.out}
                 Salir · <span className="small">{email}</span>
               </button>
+              <FormPending />
             </form>
           </div>
         </>

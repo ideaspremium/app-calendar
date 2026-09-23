@@ -9,6 +9,7 @@ import AutoForm from "@/components/admin/AutoForm";
 import { StatusPill } from "@/components/admin/bits";
 import { CopyButton } from "@/components/admin/ui";
 import { I } from "@/components/admin/icons";
+import LinkPending from "@/components/admin/LinkPending";
 
 export const metadata = { title: "Citas · Premium Calendar" };
 
@@ -72,7 +73,7 @@ export default async function Citas({ searchParams }: { searchParams: Promise<SP
     body.push(
       <tr className="row" key={b.id} style={{ position: "relative" }}>
         <td className="t" style={{ width: 190 }}>
-          <Link href={href(sp, { cita: b.id })} scroll={false} style={{ position: "absolute", inset: 0 }} aria-label={`Ver la cita de ${b.invitee_name}`} />
+          <Link href={href(sp, { cita: b.id })} scroll={false} style={{ position: "absolute", inset: 0 }} aria-label={`Ver la cita de ${b.invitee_name}`}><LinkPending /></Link>
           {hm(b.start_at, shown)} – {hm(b.end_at, shown)}
           <small>
             {zona === "negocio" ? zl(shown, b.start_at) : null}
@@ -142,12 +143,12 @@ export default async function Citas({ searchParams }: { searchParams: Promise<SP
         </select>
         <span className="seg2" role="group" aria-label="Período">
           {[["proximas", "Próximas"], ["pasadas", "Pasadas"], ["todas", "Todas"]].map(([k, l]) => (
-            <Link key={k} href={href(sp, { periodo: k, cita: undefined })} className={periodo === k ? "on" : ""} scroll={false}>{l}</Link>
+            <Link key={k} href={href(sp, { periodo: k, cita: undefined })} className={periodo === k ? "on" : ""} scroll={false}>{l}<LinkPending /></Link>
           ))}
         </span>
         <span className="seg2" role="group" aria-label="Estado">
           {[["", "Todos los estados"], ["confirmed", "Confirmadas"], ["rescheduled", "Cambiadas"], ["cancelled", "Canceladas"]].map(([k, l]) => (
-            <Link key={k || "all"} href={href(sp, { estado: k || undefined, cita: undefined })} className={(sp.estado ?? "") === k ? "on" : ""} scroll={false}>{l}</Link>
+            <Link key={k || "all"} href={href(sp, { estado: k || undefined, cita: undefined })} className={(sp.estado ?? "") === k ? "on" : ""} scroll={false}>{l}<LinkPending /></Link>
           ))}
         </span>
         <span className="zoneTag">
@@ -155,8 +156,9 @@ export default async function Citas({ searchParams }: { searchParams: Promise<SP
           <span className="seg2" role="group" aria-label="Zona de las horas">
             <Link href={href(sp, { zona: undefined, cita: undefined })} className={zona === "mia" ? "on" : ""} scroll={false}>
               {ctx.viewerTzSource === "device" ? "Mi zona" : "Zona de la agencia"} · {zl(me)}
+              <LinkPending />
             </Link>
-            <Link href={href(sp, { zona: "negocio", cita: undefined })} className={zona === "negocio" ? "on" : ""} scroll={false}>Zona de cada negocio</Link>
+            <Link href={href(sp, { zona: "negocio", cita: undefined })} className={zona === "negocio" ? "on" : ""} scroll={false}>Zona de cada negocio<LinkPending /></Link>
           </span>
         </span>
       </AutoForm>

@@ -50,16 +50,24 @@ function displayName(meta: Record<string, unknown> | undefined, email?: string):
 /** Contexto del panel para esta petición: sesión, agencias visibles, papel y zona. */
 export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   const sb = await supabaseServer();
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return null;
-  const isPlatform = (user.app_metadata as Record<string, unknown> | undefined)?.platform_admin === true;
-
-  const [{ data: agencyRows }, { data: memberships }] = await Promise.all([
+  // El id sale del token, verificado aquí mismo (getClaims); así las consultas de la agencia
+  // salen a la vez que la comprobación fuerte con Supabase (getUser), en vez de esperarla.
+  const { data: claims } = await sb.auth.getClaims();
+  const uid = claims?.claims?.sub;
+  if (!uid) return null;
+  const [
+    {
+      data: { user },
+    },
+    { data: agencyRows },
+    { data: memberships },
+  ] = await Promise.all([
+    sb.auth.getUser(),
     sb.from("agencies").select("id,name,slug,timezone,contact_email,settings").order("name"),
-    sb.from("agency_members").select("agency_id,role").eq("user_id", user.id),
+    sb.from("agency_members").select("agency_id,role").eq("user_id", uid),
   ]);
+  if (!user || user.id !== uid) return null;
+  const isPlatform = (user.app_metadata as Record<string, unknown> | undefined)?.platform_admin === true;
   const agencies = (agencyRows ?? []) as Agency[];
   const mine = new Map((memberships ?? []).map((m) => [m.agency_id as string, m.role as Role]));
 
