@@ -17,7 +17,8 @@ type Props = {
   rescheduleBookingRef?: string;
   cancelBookingRef?: string;
   onSlot?: (slot: Slot) => void;
-  onBooked?: (slot: Slot | null) => void;
+  /** `bookingId` es el id de reserva de Nylas (sirve para asociarle la atribución). */
+  onBooked?: (slot: Slot | null, bookingId: string | null) => void;
   onTimezone?: (tz: string) => void;
 };
 
@@ -106,7 +107,9 @@ export default function BookingWidget({
       if (typeof tz === "string") handlers.current.onTimezone?.(tz);
     };
     const onBookedEv = (e: Event) => {
-      handlers.current.onBooked?.(slot.current);
+      const detail = (e as CustomEvent).detail as { data?: { booking_id?: unknown } } | null;
+      const bookingId = typeof detail?.data?.booking_id === "string" ? detail.data.booking_id : null;
+      handlers.current.onBooked?.(slot.current, bookingId);
       // Aviso a la página que embebe (analítica o redirección).
       try {
         window.parent?.postMessage({ type: "premium-calendar:booked", detail: (e as CustomEvent).detail ?? null }, "*");

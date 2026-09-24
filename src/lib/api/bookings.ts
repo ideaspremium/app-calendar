@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { EventType } from "@/lib/types";
 import type { ApiKey } from "./auth";
 import { connectionOf, loadCalendar, professionalOf, questionSource, type CalendarCtx } from "./calendars";
+import { externalRefOut, type Attribution } from "./attribution";
 import { ApiError, isUuid, optString } from "./http";
 import { isValidTimeZone, toIsoInZone } from "./time";
 
@@ -31,14 +32,19 @@ export type BookingRow = {
   idempotency_key: string | null;
   request_hash: string | null;
   external_ref: string | null;
+  attribution: Attribution | null;
   created_at: string;
   updated_at: string;
 };
 
-/** Estado público: «rescheduled» es interno (la cita sigue en pie, en otra hora). */
+/**
+ * Estado público. `rescheduled` se expone tal cual desde CONTRATO_CONVERSIONES v1.0
+ * (la cita sigue en pie, en otra hora): Xtrategy360 lo usa para medir reprogramaciones.
+ */
 export function publicStatus(r: Pick<BookingRow, "status">) {
   if (r.status === "cancelled") return "cancelled";
   if (r.status === "pending") return "pending";
+  if (r.status === "rescheduled") return "rescheduled";
   if (r.status === "completed" || r.status === "no_show") return r.status;
   return "confirmed";
 }
@@ -56,32 +62,59 @@ export function manageLinks(r: Pick<BookingRow, "manage_token" | "nylas_booking_
   return { manage_url: base, reschedule_url: `${base}/reprogramar`, cancel_url: `${base}/cancelar` };
 }
 
+/**
+ * Objeto de cita de la API. Es un superconjunto: los campos de siempre (`start`,
+ * `attendee`, `manage`…) y, desde CONTRATO_CONVERSIONES v1.0 §3.2, los que consume
+ * Xtrategy360 (`start_at`, `invitee`, `client_slug`, `business_id`, `attribution`,
+ * `manage_url`…). Mismo objeto en GET, POST, el listado incremental y el aviso saliente.
+ */
 export function serializeBooking(ctx: CalendarCtx, r: BookingRow) {
   const tz = ctx.client.timezone;
   const attendeeTz = isValidTimeZone(r.invitee_timezone) ? r.invitee_timezone : tz;
   const conn = ctx.connections.find((c) => c.id === r.calendar_connection_id) ?? null;
+  const start = toIsoInZone(new Date(r.start_at), tz);
+  const end = toIsoInZone(new Date(r.end_at), tz);
+  const links = manageLinks(r);
+  const attendee = {
+    name: r.invitee_name,
+    email: r.invitee_email || null,
+    phone: r.invitee_phone,
+    timezone: attendeeTz,
+  };
+  const eventTypeName = r.event_type_id
+    ? ctx.services.find((s) => s.id === r.event_type_id)?.name ?? ctx.eventTypeNames?.[r.event_type_id] ?? null
+    : null;
   return {
     id: r.id,
     status: publicStatus(r),
+    source: r.source === "api" ? "api" : "web",
+    // Identidad del calendario y del negocio
     calendar_id: r.client_id,
+    client_id: r.client_id,
+    client_slug: ctx.client.slug,
+    business_id: ctx.client.business_id ?? null,
     service_id: r.event_type_id,
+    event_type_id: r.event_type_id,
+    event_type_name: eventTypeName,
     professional: professionalOf(ctx, conn),
     timezone: tz,
-    start: toIsoInZone(new Date(r.start_at), tz),
-    end: toIsoInZone(new Date(r.end_at), tz),
+    start,
+    end,
+    start_at: start,
+    end_at: end,
     attendee: {
-      name: r.invitee_name,
-      email: r.invitee_email || null,
-      phone: r.invitee_phone,
-      timezone: attendeeTz,
+      ...attendee,
       // El mismo instante leído en la zona del visitante: lo que el chat le dice.
       local_start: toIsoInZone(new Date(r.start_at), attendeeTz),
       local_end: toIsoInZone(new Date(r.end_at), attendeeTz),
     },
+    invitee: attendee,
+    answers: r.answers ?? {},
     notes: r.notes,
-    external_ref: r.external_ref,
-    source: r.source === "api" ? "api" : "web",
-    manage: manageLinks(r),
+    external_ref: externalRefOut(r.external_ref),
+    attribution: r.attribution ?? null,
+    manage: links,
+    manage_url: links?.manage_url ?? null,
     cancelled_at: r.cancelled_at ? toIsoInZone(new Date(r.cancelled_at), tz) : null,
     cancel_reason: r.cancel_reason,
     created_at: toIsoInZone(new Date(r.created_at), tz),

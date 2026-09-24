@@ -170,6 +170,7 @@ export default async function Negocio({
       {tab === "datos" && (
         <DataForm
           canEdit={ctx.canManage}
+          businessId={c.business_id ?? null}
           host={base.replace(/^https?:\/\//, "")}
           client={{
             id: c.id, name: c.name, slug: c.slug, timezone: c.timezone, locale: c.locale,

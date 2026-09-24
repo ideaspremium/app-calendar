@@ -22,6 +22,8 @@ export type Client = {
   custom_domain: string | null;
   is_active: boolean;
   embed_settings: Record<string, unknown>;
+  /** business_id de la suite (CONTRATO_BUSINESS_ID): lo emite Xplore360; inmutable una vez puesto. */
+  business_id?: string | null;
 };
 
 export type EventType = {

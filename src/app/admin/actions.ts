@@ -175,6 +175,35 @@ export async function updateClientData(input: {
   return { ok: true, slug };
 }
 
+const BUSINESS_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/**
+ * Asigna el business_id del negocio (CONTRATO_BUSINESS_ID v1.2). Lo emite Xplore360: aquí
+ * solo se copia. Una sola vez: la base de datos rechaza cambiarlo después.
+ */
+export async function setClientBusinessId(clientId: string, businessId: string): Promise<Result<{ business_id: string }>> {
+  const ctx = await requireAgency();
+  if (!ctx.canManage) return fail("Solo dueño/a o admin pueden asignar el business_id.");
+  const value = str(businessId).toLowerCase();
+  if (!BUSINESS_ID_RE.test(value)) {
+    return fail("No es un business_id válido: debe ser un UUID v4 (36 caracteres, p. ej. b91e4ae2-7464-4975-b65f-e3d13fb6485a).");
+  }
+  const { data, error } = await ctx.sb
+    .from("clients")
+    .update({ business_id: value })
+    .eq("id", clientId)
+    .is("business_id", null)
+    .select("id");
+  if (error) {
+    if (error.code === "23505") return fail("Ese business_id ya está asignado a otro negocio.");
+    if (/inmutable/.test(error.message)) return fail("Este negocio ya tiene business_id y no se puede cambiar.");
+    return fail(dbError(error));
+  }
+  if (!data?.length) return fail("Este negocio ya tiene business_id, o tu papel no permite el cambio.");
+  revalidatePath(`/admin/clients/${clientId}`);
+  return { ok: true, business_id: value };
+}
+
 export type ImageInput = {
   style: "clasico" | "vidrio";
   logo_url: string;

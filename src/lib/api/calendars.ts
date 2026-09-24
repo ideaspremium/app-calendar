@@ -24,8 +24,19 @@ type Rule = { weekday: number; start_time: string; end_time: string; event_type_
 type Override = { date: string; is_blocked: boolean; start_time: string | null; end_time: string | null; event_type_id: string | null };
 
 export type CalendarCtx = {
-  client: { id: string; agency_id: string; name: string; slug: string; timezone: string; locale: string };
+  client: {
+    id: string;
+    agency_id: string;
+    name: string;
+    slug: string;
+    timezone: string;
+    locale: string;
+    /** business_id de la suite (CONTRATO_BUSINESS_ID); null mientras no se asigne. */
+    business_id: string | null;
+  };
   services: EventType[];
+  /** Nombre de cada tipo de cita del cliente, también de los desactivados (para citas antiguas). */
+  eventTypeNames: Record<string, string>;
   connections: Connection[];
   rules: Rule[];
   overrides: Override[];
@@ -33,7 +44,7 @@ export type CalendarCtx = {
 
 type ClientRow = CalendarCtx["client"] & { is_active: boolean };
 
-const CLIENT_COLS = "id, agency_id, name, slug, timezone, locale, is_active";
+const CLIENT_COLS = "id, agency_id, name, slug, timezone, locale, business_id, is_active";
 
 /** Un día antes de hoy en UTC: cubre cualquier zona sin traer festivos de años pasados. */
 const overridesFrom = () => new Date(Date.now() - DAY_MS).toISOString().slice(0, 10);
@@ -46,7 +57,7 @@ const overridesFrom = () => new Date(Date.now() - DAY_MS).toISOString().slice(0,
  */
 async function loadParts(clientIds: string[]) {
   const db = supabaseAdmin();
-  const [services, connections, rules, overrides] = await Promise.all([
+  const [services, connections, rules, overrides, names] = await Promise.all([
     db.from("event_types").select("*").in("client_id", clientIds).eq("is_active", true).order("name"),
     db
       .from("calendar_connections")
@@ -58,14 +69,26 @@ async function loadParts(clientIds: string[]) {
       .select("client_id, date, is_blocked, start_time, end_time, event_type_id")
       .in("client_id", clientIds)
       .gte("date", overridesFrom()),
+    db.from("event_types").select("id, client_id, name").in("client_id", clientIds),
   ]);
-  for (const r of [services, connections, rules, overrides]) {
+  for (const r of [services, connections, rules, overrides, names]) {
     if (r.error) throw new Error(`loadCalendar: ${r.error.message}`);
   }
   const by = <T extends { client_id: string }>(rows: T[] | null, id: string) => (rows ?? []).filter((x) => x.client_id === id);
   return (c: ClientRow): CalendarCtx => ({
-    client: { id: c.id, agency_id: c.agency_id, name: c.name, slug: c.slug, timezone: c.timezone, locale: c.locale },
+    client: {
+      id: c.id,
+      agency_id: c.agency_id,
+      name: c.name,
+      slug: c.slug,
+      timezone: c.timezone,
+      locale: c.locale,
+      business_id: c.business_id ?? null,
+    },
     services: by(services.data as EventType[] | null, c.id),
+    eventTypeNames: Object.fromEntries(
+      by(names.data as { id: string; client_id: string; name: string }[] | null, c.id).map((x) => [x.id, x.name])
+    ),
     connections: by(connections.data as (Connection & { client_id: string })[] | null, c.id),
     rules: by(rules.data as (Rule & { client_id: string })[] | null, c.id),
     overrides: by(overrides.data as (Override & { client_id: string })[] | null, c.id),
@@ -89,6 +112,24 @@ export async function loadCalendar(key: ApiKey, calendarId: unknown): Promise<Ca
     throw new ApiError("calendar_not_found", "No existe ese calendario.", { details: { calendar_id: calendarId } });
   }
   return build(row);
+}
+
+/**
+ * Contextos para serializar citas de varios clientes (listado incremental, avisos).
+ * A diferencia de loadCalendar no filtra por negocio activo: las citas de un negocio
+ * desactivado siguen siendo conversiones. La visibilidad por clave se aplica antes.
+ */
+export async function loadContexts(clientIds: string[]): Promise<Map<string, CalendarCtx>> {
+  const out = new Map<string, CalendarCtx>();
+  const ids = [...new Set(clientIds)];
+  if (!ids.length) return out;
+  const [clientRes, build] = await Promise.all([
+    supabaseAdmin().from("clients").select(CLIENT_COLS).in("id", ids),
+    loadParts(ids),
+  ]);
+  if (clientRes.error) throw new Error(`loadContexts: ${clientRes.error.message}`);
+  for (const row of (clientRes.data ?? []) as ClientRow[]) out.set(row.id, build(row));
+  return out;
 }
 
 export async function listCalendars(key: ApiKey): Promise<CalendarCtx[]> {
@@ -203,6 +244,8 @@ export function serializeCalendar(ctx: CalendarCtx) {
   return {
     id: ctx.client.id,
     name: ctx.client.name,
+    slug: ctx.client.slug,
+    business_id: ctx.client.business_id ?? null,
     timezone: ctx.client.timezone,
     locale: ctx.client.locale,
     services: ctx.services.map((s) => serializeService(ctx, s)),

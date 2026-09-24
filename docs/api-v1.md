@@ -175,7 +175,13 @@ Cabecera obligatoria: `Idempotency-Key`, hasta 255 caracteres, **una por intento
 - `service_id`: opcional con las mismas reglas que en disponibilidad.
 - `attendee.email` es **obligatorio** (el proveedor lo exige para enviar la confirmación). `phone`, `timezone` (IANA, para los correos del visitante) y `language` son opcionales.
 - `notes` (hasta 2000 caracteres) queda en la cita y en la descripción del evento de la agenda del profesional, junto con el teléfono.
-- `external_ref` es libre (hasta 255): vuestro id de lead o de conversación.
+- `external_ref`: texto libre (hasta 255: vuestro id de lead o de conversación) **o** un objeto JSON. Para los integradores de la suite se **recomienda** el objeto de la convención de `CONTRATO_CONVERSIONES` §2, que cierra la cadena campaña → lead → reserva sin inferencias:
+  ```json
+  { "suite": "ips", "contract": "conversiones-1.0", "business_id": "uuid", "lead_id": "uuid del lead en Premium Chatbots",
+    "campaign_id": "code de campaña", "asset_id": "utm_content del activo", "origin_app": "chatbots" }
+  ```
+  Las claves sin valor se omiten. Se devuelve tal como se envió (objeto → objeto, texto → texto).
+- `attribution` (opcional): `{ "page_url", "referrer", "utm": { "source", "medium", "campaign", "content", "term" }, "captured_at" }`. Si falta algún UTM se guarda `null`. En las reservas hechas en la página pública se captura sola (ver «Atribución»).
 - `professional_id`: opcional; hoy solo puede ser el profesional del servicio.
 
 Respuesta `201`:
@@ -211,11 +217,35 @@ Respuesta `201`:
 }
 ```
 
+Además de estos campos, cada cita lleva los del objeto de `CONTRATO_CONVERSIONES` §3.2 (mismos datos, otros nombres; ninguno de los anteriores cambia): `client_id`, `client_slug`, `business_id` (o `null` mientras el negocio no lo tenga), `event_type_id`, `event_type_name`, `start_at`, `end_at`, `invitee` (`name`, `email`, `phone`, `timezone`), `answers`, `attribution` y `manage_url`.
+
 `start`/`end` van en la zona del calendario; `attendee.local_start`/`local_end` son el mismo instante en la zona del visitante, listo para decírselo. Los enlaces de `manage` son para el visitante: dejan cancelar o cambiar la cita sin pasar por el chat y siguen valiendo aunque se renombre el cliente. El visitante recibe además el correo de confirmación con esos mismos enlaces.
 
 ### `GET /bookings/{id}` · `GET /bookings?external_ref=…`
 
-Una cita por id, o todas las de una referencia externa (máx. 50, las más recientes primero). `status`: `pending` (creándose), `confirmed` o `cancelled`.
+Una cita por id, o todas las de una referencia externa (máx. 50, las más recientes primero). Una referencia en forma de objeto se busca pasando el objeto en JSON (el orden de las claves da igual).
+
+`status`: `pending` (creándose), `confirmed`, `rescheduled` (sigue en pie, en otra hora) o `cancelled`. *Desde el 24/09/2026 `rescheduled` se devuelve tal cual; antes se mostraba como `confirmed`.*
+
+### `GET /bookings?updated_since=…` — listado incremental
+
+Para sincronizar por pull (lo usa Xtrategy360 cada 5 minutos).
+
+| Parámetro | | |
+|---|---|---|
+| `updated_since` | obligatorio (salvo con `cursor`) | ISO 8601 con desfase. Inclusivo: citas con `updated_at >= updated_since`. |
+| `limit` | opcional | 1 a 200. Por defecto, 100. |
+| `cursor` | opcional | El `next_cursor` de la respuesta anterior, tal cual. |
+
+```json
+{ "data": [ { …cita… } ], "next_cursor": "WyIyMDI2LTA5…" }
+```
+
+- Orden por `updated_at` y después `id`; el cursor no repite ni salta citas entre páginas.
+- Devuelve **todas** las citas de los calendarios que ve la clave, también las canceladas y reprogramadas y las de negocios desactivados. No incluye las que aún se están creando (`pending`): aparecen al confirmarse.
+- `next_cursor` es `null` cuando no hay más.
+- Recomendación: guardar el mayor `updated_at` recibido y pedir desde ahí menos un margen (p. ej. 2 minutos). Con idempotencia por `id`, repetir alguna cita no cuesta nada.
+- Sin `updated_since` ni `cursor`: `invalid_request`. `limit` fuera de rango o `cursor` alterado: `invalid_request`.
 
 ### `POST /bookings/{id}/reschedule`
 
@@ -249,10 +279,15 @@ Regla práctica para el agente: generar la clave cuando el visitante dice «sí�
 
 ## Avisos salientes (webhook)
 
-Cuando una cita creada con vuestra clave se cancela o cambia **fuera de la API** (el visitante usa el enlace del correo o los de `manage`), Premium Calendar hace un `POST` a vuestra URL. Los cambios hechos por la propia API no generan aviso.
+Premium Calendar hace un `POST` a vuestra URL cuando cambia una cita. Qué se avisa depende de `notify_all_sources`:
 
-- `PUT /webhook` con `{ "url": "https://…" }` — configura la URL y devuelve el `secret` de firma. Cambiar la URL conserva el secreto; `"rotate_secret": true` genera uno nuevo.
-- `GET /webhook` — URL actual (sin el secreto). `DELETE /webhook` — lo desactiva.
+| `notify_all_sources` | Qué avisos llegan |
+|---|---|
+| `false` (por defecto) | `booking.cancelled` y `booking.rescheduled` de las citas creadas con vuestra clave, cuando cambian **fuera de la API** (el visitante usa el enlace del correo o los de `manage`). Los cambios hechos por la propia API no generan aviso. |
+| `true` | `booking.created`, `booking.rescheduled` y `booking.cancelled` de **todos** los calendarios que ve la clave, **sea cual sea el origen**: página pública, API (con cualquier clave, también la vuestra) o enlace del correo. |
+
+- `PUT /webhook` con `{ "url": "https://…", "notify_all_sources": true }` — configura la URL y devuelve el `secret` de firma. `notify_all_sources` es opcional: si no se envía, se conserva el que había. Cambiar la URL conserva el secreto; `"rotate_secret": true` genera uno nuevo.
+- `GET /webhook` — URL actual y `notify_all_sources` (sin el secreto). `DELETE /webhook` — lo desactiva.
 - `POST /webhook/test` — envía un aviso `ping` firmado para probar.
 
 ```
@@ -261,10 +296,26 @@ X-PremiumCalendar-Event: booking.cancelled
 X-PremiumCalendar-Signature: t=1790120000,v1=5f2c…
 Content-Type: application/json
 
-{ "id": "b1c0…", "type": "booking.cancelled", "created_at": "2026-09-22T22:40:00.000Z", "data": { …la cita, mismo formato que GET /bookings/{id}… } }
+{
+  "event": "booking.cancelled",
+  "occurred_at": "2026-09-22T18:40:00-04:00",
+  "data": { …la cita, mismo objeto que GET /bookings/{id}… },
+  "id": "b1c0…", "type": "booking.cancelled", "created_at": "2026-09-22T22:40:01.000Z"
+}
 ```
 
-Tipos: `booking.cancelled`, `booking.rescheduled`. Para verificar: `v1 = HMAC-SHA256(secret, t + "." + cuerpo_en_bruto)` en hexadecimal, y rechazar si `t` tiene más de 5 minutos. Se intenta una vez, con 5 s de espera; cada envío queda registrado.
+- `event` y `occurred_at` son los del contrato de conversiones; `id` (único por aviso), `type` (= `event`) y `created_at` (cuándo se envió) se mantienen por compatibilidad.
+- Firma: `v1 = HMAC-SHA256(secret, t + "." + cuerpo_en_bruto)` en hexadecimal; rechazar si `t` tiene más de 5 minutos.
+- Hasta **3 intentos** si no se responde `2xx`: inmediato, a 1 s y a 3 s, cada uno con 5 s de espera. Cada envío queda registrado. El aviso es un acelerador: con `notify_all_sources`, el listado incremental es la red de seguridad.
+- Un `booking.created` de la página pública sale unos 4 s después de reservar, para llevar ya la atribución.
+
+## Atribución de las reservas web
+
+En las reservas hechas en la página pública, `attribution` se rellena sola:
+
+- **Embebida con `embed.js`**: el script lee los `utm_*` de la página que embebe; si no hay, los de la cookie de primera parte `ips_utm` (JSON, 30 días), que escribe la primera vez que ve UTM en ese dominio. Pasa a la reserva la URL de esa página, su `document.referrer` y esos UTM.
+- **Enlace directo**: los `utm_*` de la propia URL de reserva, la URL y el `document.referrer`.
+- Sin UTM ni cookie: los cinco UTM van a `null`, pero `page_url` y `referrer` se guardan siempre que se conozcan.
 
 ## Flujo recomendado para el agente
 

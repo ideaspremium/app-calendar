@@ -13,7 +13,8 @@ export const POST = handler<Record<string, never>>(async (req, ctx) => {
   if (!data?.webhook_url || !data.webhook_secret) {
     throw new ApiError("invalid_request", "No hay URL de aviso configurada: usa PUT /api/v1/webhook primero.");
   }
-  const body = JSON.stringify({ id: randomUUID(), type: "ping", created_at: new Date().toISOString(), data: {} });
+  const now = new Date().toISOString();
+  const body = JSON.stringify({ id: randomUUID(), event: "ping", type: "ping", occurred_at: now, created_at: now, data: {} });
   let status: number | null = null;
   let error: string | null = null;
   try {

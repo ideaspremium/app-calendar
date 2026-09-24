@@ -5,10 +5,11 @@ import ClientFrame, { publicTheme } from "@/components/ClientFrame";
 import { Icon } from "@/components/public/icons";
 import { T, asLang } from "@/lib/public-texts";
 import { getPublicClient, getPublicEventTypes } from "@/lib/public";
+import { keepAttributionParams } from "@/lib/attribution-params";
 
 export default async function ClientPage({
   params, searchParams,
-}: { params: Promise<{ client: string }>; searchParams: Promise<{ embed?: string; estilo?: string; lang?: string }> }) {
+}: { params: Promise<{ client: string }>; searchParams: Promise<{ embed?: string; estilo?: string; lang?: string; [param: string]: string | string[] | undefined }> }) {
   const { client: slug } = await params;
   const search = await searchParams;
   const host = (await headers()).get("host");
@@ -20,6 +21,7 @@ export default async function ClientPage({
   if (search.embed === "1") keep.set("embed", "1");
   if (search.estilo) keep.set("estilo", search.estilo);
   if (search.lang) keep.set("lang", search.lang);
+  keepAttributionParams(search, keep);
   const qs = keep.toString() ? `?${keep}` : "";
 
   // Con un solo servicio, la lista sobra: se entra directo a reservar.

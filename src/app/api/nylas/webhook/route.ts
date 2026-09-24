@@ -1,10 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { after, NextRequest, NextResponse } from "next/server";
-import type { ApiKey } from "@/lib/api/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { releaseAbandonedPending } from "@/lib/api/booking-flow";
 import type { BookingRow } from "@/lib/api/bookings";
-import { loadCalendar } from "@/lib/api/calendars";
-import { notifyIntegrator } from "@/lib/api/webhooks";
+import { scheduleBookingEvent, type OutboundType } from "@/lib/api/webhooks";
+import { takePendingAttribution } from "@/lib/booking-attribution";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { updateEventTitle } from "@/lib/nylas";
 
@@ -173,6 +172,12 @@ export async function POST(req: NextRequest) {
       });
 
       if (!handledByApi) {
+        // Cómo estaba antes, para saber qué ha cambiado (Nylas puede repetir un aviso).
+        const { data: before } = await db
+          .from("bookings")
+          .select("id, status, start_at, end_at")
+          .eq("nylas_booking_id", bookingId)
+          .maybeSingle();
         const upsert = () =>
           db.from("bookings").upsert(
             {
@@ -195,20 +200,27 @@ export async function POST(req: NextRequest) {
               source: "web",
             },
             { onConflict: "nylas_booking_id" }
-          );
-        let { error: saveError } = await upsert();
+          ).select("id").single();
+        let { data: savedRow, error: saveError } = await upsert();
         // Solape con otra fila (restricción de exclusión): casi siempre es una reserva del
         // chat para ese mismo hueco que todavía está en curso y que Nylas va a rechazar
         // porque ha ganado la web. Se le da tiempo a liberarse antes de rendirse.
         for (let attempt = 0; saveError?.code === "23P01" && attempt < 3; attempt++) {
           const released = await releaseAbandonedPending(et.client_id, new Date(start), new Date(end));
           if (!released) await new Promise((r) => setTimeout(r, 1500));
-          ({ error: saveError } = await upsert());
+          ({ data: savedRow, error: saveError } = await upsert());
         }
         if (saveError) {
           console.error("[webhook] no se pudo guardar la reserva:", saveError.message, "|", saveError.details ?? "");
         } else {
           console.log("[webhook] reserva guardada:", bookingId, "|", start, "→", end);
+          // La atribución que mandó el navegador, si llegó antes que este aviso.
+          await takePendingAttribution(bookingId);
+          const outbound = webEventType(before, status, start, end);
+          if (outbound && savedRow?.id) {
+            // Al crear, un momento de espera para que el aviso ya lleve la atribución.
+            scheduleBookingEvent(savedRow.id, outbound, "external", { delayMs: outbound === "booking.created" ? 4000 : 0 });
+          }
         }
 
         // El título del evento lo pone Nylas sin el nombre de quien reserva, así que
@@ -245,8 +257,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
-
-const PLATFORM: ApiKey = { id: "", name: "webhook", agency_id: null };
 
 /**
  * Refleja en la fila de una cita creada por la API lo que avisa Nylas. Devuelve true si
@@ -291,6 +301,8 @@ async function syncApiBooking(
       .maybeSingle();
     if (claimed) {
       console.log("[webhook] cita de la API enlazada:", (claimed as BookingRow).id, "←", a.bookingId);
+      // La respuesta de Nylas a la API se perdió, pero la cita existe: se confirma aquí.
+      scheduleBookingEvent((claimed as BookingRow).id, "booking.created", "api");
       return true;
     }
   }
@@ -320,15 +332,23 @@ async function syncApiBooking(
   row = updated as BookingRow;
   console.log("[webhook] cita de la API cambiada fuera de la API:", row.id, a.type);
 
-  const outbound = cancelledNow ? "booking.cancelled" : "booking.rescheduled";
-  const saved = row;
-  after(async () => {
-    try {
-      const cal = await loadCalendar(PLATFORM, saved.client_id);
-      await notifyIntegrator(cal, saved, outbound);
-    } catch (e) {
-      console.error("[webhook saliente] no se pudo enviar:", (e as Error).message);
-    }
-  });
+  scheduleBookingEvent(row.id, cancelledNow ? "booking.cancelled" : "booking.rescheduled", "external");
   return true;
+}
+
+/**
+ * Qué aviso saliente corresponde a un cambio en una reserva web, comparando con cómo
+ * estaba. Null si no ha cambiado nada (aviso repetido de Nylas).
+ */
+function webEventType(
+  before: { status: string; start_at: string; end_at: string } | null,
+  status: "cancelled" | "rescheduled" | "pending" | "confirmed",
+  start: string,
+  end: string
+): OutboundType | null {
+  if (status === "pending") return null;
+  if (!before) return status === "cancelled" ? "booking.cancelled" : "booking.created";
+  if (status === "cancelled") return before.status === "cancelled" ? null : "booking.cancelled";
+  const moved = Date.parse(before.start_at) !== Date.parse(start) || Date.parse(before.end_at) !== Date.parse(end);
+  return moved ? "booking.rescheduled" : null;
 }

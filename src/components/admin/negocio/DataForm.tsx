@@ -1,11 +1,13 @@
 "use client";
 import { useState, useTransition } from "react";
-import { updateClientData } from "@/app/admin/actions";
+import { setClientBusinessId, updateClientData } from "@/app/admin/actions";
 import { Notice, ZoneField } from "../ui";
 
 type Data = { id: string; name: string; slug: string; timezone: string; locale: string; contact_email: string; website_url: string; custom_domain: string };
 
-export default function DataForm({ client, host, canEdit }: { client: Data; host: string; canEdit: boolean }) {
+export default function DataForm({
+  client, host, canEdit, businessId,
+}: { client: Data; host: string; canEdit: boolean; businessId: string | null }) {
   const [v, setV] = useState(client);
   const [msg, setMsg] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -76,6 +78,7 @@ export default function DataForm({ client, host, canEdit }: { client: Data; host
           <input id="d-dom" className="inp" value={v.custom_domain} onChange={set("custom_domain")} disabled={!canEdit} placeholder="citas.negocio.com" />
           <small>Apunta un CNAME de ese dominio a la app y escribe aquí el dominio.</small>
         </div>
+        <BusinessIdField clientId={client.id} initial={businessId} canEdit={canEdit} />
         {msg && (
           <div className="full">
             <Notice kind={msg.kind}>{msg.text}</Notice>
@@ -88,5 +91,68 @@ export default function DataForm({ client, host, canEdit }: { client: Data; host
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * business_id de la suite (lo emite Xplore360). Se escribe una sola vez: después queda
+ * de solo lectura, porque la base de datos no deja cambiarlo.
+ */
+function BusinessIdField({ clientId, initial, canEdit }: { clientId: string; initial: string | null; canEdit: boolean }) {
+  const [saved, setSaved] = useState(initial);
+  const [value, setValue] = useState("");
+  const [msg, setMsg] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const valid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+
+  function assign() {
+    setMsg(null);
+    start(async () => {
+      const r = await setClientBusinessId(clientId, value);
+      if (r.ok) {
+        setSaved(r.business_id);
+        setMsg({ kind: "ok", text: "business_id asignado." });
+      } else setMsg({ kind: "bad", text: r.error });
+    });
+  }
+
+  return (
+    <div className="fl full">
+      <label htmlFor="d-bid">Identificador del negocio en la suite (business_id)</label>
+      {saved ? (
+        <>
+          <input id="d-bid" className="inp" value={saved} readOnly />
+          <small>Lo emite Xplore360. No se puede cambiar.</small>
+        </>
+      ) : canEdit ? (
+        <>
+          <div className="pre">
+            <input
+              id="d-bid"
+              className="inp"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="b91e4ae2-7464-4975-b65f-e3d13fb6485a"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <button type="button" className="btn sec" onClick={assign} disabled={!valid || pending}>
+              {pending ? "Asignando…" : "Asignar"}
+            </button>
+          </div>
+          <small className={value && !valid ? "warn" : undefined}>
+            {value && !valid
+              ? "Debe ser un UUID v4 (36 caracteres)."
+              : "Lo emite Xplore360 en la primera auditoría. Revísalo bien: una vez asignado no se puede cambiar."}
+          </small>
+        </>
+      ) : (
+        <>
+          <input id="d-bid" className="inp" value="Sin asignar" readOnly disabled />
+          <small>Solo dueño/a o admin de la agencia pueden asignarlo.</small>
+        </>
+      )}
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+    </div>
   );
 }

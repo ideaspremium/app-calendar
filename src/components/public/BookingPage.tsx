@@ -2,11 +2,12 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import ClientFrame, { publicTheme } from "@/components/ClientFrame";
 import BookingShell from "./BookingShell";
+import { keepAttributionParams } from "@/lib/attribution-params";
 import { NYLAS_SCHEDULER_API_URL } from "@/lib/nylas";
 import { asLang } from "@/lib/public-texts";
 import { getBookingForRef, getPublicClient, getPublicEventType, getPublicEventTypes } from "@/lib/public";
 
-export type BookingSearch = { embed?: string; estilo?: string; lang?: string };
+export type BookingSearch = { embed?: string; estilo?: string; lang?: string; [param: string]: string | string[] | undefined };
 
 /**
  * Las tres páginas de reserva (reservar, cambiar, cancelar) comparten todo menos el modo.
@@ -38,6 +39,7 @@ export default async function BookingPage({
   if (embedded) keep.set("embed", "1");
   if (search.estilo) keep.set("estilo", search.estilo);
   if (search.lang) keep.set("lang", search.lang);
+  keepAttributionParams(search, keep);
   const qs = keep.toString() ? `?${keep}` : "";
 
   return (

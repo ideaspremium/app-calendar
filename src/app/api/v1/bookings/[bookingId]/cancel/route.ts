@@ -4,6 +4,7 @@ import { loadBooking, serializeBooking, type BookingRow } from "@/lib/api/bookin
 import { ApiError, handler, json, optString, readJson } from "@/lib/api/http";
 import { MINUTE_MS } from "@/lib/api/time";
 import { cancelSchedulerBooking, MIN_CANCELLATION_NOTICE_MINUTES, NylasApiError } from "@/lib/nylas";
+import { scheduleBookingEvent } from "@/lib/api/webhooks";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -69,5 +70,6 @@ export const POST = handler<{ bookingId: string }>(async (req, ctx, { bookingId 
       });
     }
   }
+  scheduleBookingEvent(row.id, "booking.cancelled", "api");
   return json(ctx, serializeBooking(cal, updated as BookingRow));
 });

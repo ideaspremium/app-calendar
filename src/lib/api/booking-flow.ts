@@ -1,3 +1,4 @@
+import { scheduleBookingEvent } from "./webhooks";
 import { after } from "next/server";
 import { createSchedulerBooking, getEvent, NylasApiError, updateEvent } from "@/lib/nylas";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -188,6 +189,8 @@ export async function createAtProvider(
     console.error("[api] no se pudo confirmar la fila tras crear en Nylas:", error?.message);
   }
   const saved = (data as BookingRow | null) ?? { ...row, nylas_booking_id: nb.booking_id, status: "confirmed" as const };
+  // Aviso booking.created a las claves que lo reciben todo (Xtrategy360).
+  if (data) scheduleBookingEvent(saved.id, "booking.created", "api");
 
   // El título con el nombre y la nota del visitante, en la agenda del profesional.
   // Después de responder: no hace esperar al chat.

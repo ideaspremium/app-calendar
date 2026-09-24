@@ -6,6 +6,7 @@ import { Icon, locationIcon } from "./icons";
 import { formatInTimeZone } from "@/lib/datetime";
 import { T } from "@/lib/public-texts";
 import { isValidZone, zoneLabelL, type Lang } from "@/lib/zones";
+import { captureAttribution, sendAttribution, type ClientAttribution } from "@/lib/attribution-client";
 
 export type ShellProps = {
   client: { name: string; logoUrl: string | null; timezone: string };
@@ -62,7 +63,13 @@ export default function BookingShell({ client, event, mode, current, backHref, i
   const [shownTz, setShownTz] = useState<string | null>(null);
   const [chosen, setChosen] = useState(false);
   const [booked, setBooked] = useState<Slot | null>(null);
+  const [attribution, setAttribution] = useState<ClientAttribution | null>(null);
   const t = T[lang];
+
+  // Atribución (UTM, página, referrer): solo al reservar, no al cambiar ni al cancelar.
+  useEffect(() => {
+    if (mode === "book") setAttribution(captureAttribution());
+  }, [mode]);
 
   useEffect(() => {
     const tz = detectTimezone();
@@ -196,7 +203,10 @@ export default function BookingShell({ client, event, mode, current, backHref, i
             rescheduleBookingRef={nylas.rescheduleBookingRef}
             cancelBookingRef={nylas.cancelBookingRef}
             onTimezone={(tz) => isValidZone(tz) && setShownTz(tz)}
-            onBooked={(s) => s && setBooked(s)}
+            onBooked={(s, bookingId) => {
+              if (mode === "book" && bookingId) sendAttribution(bookingId, attribution);
+              if (s) setBooked(s);
+            }}
           />
         ) : (
           <div className="pc-skeleton" aria-hidden="true">

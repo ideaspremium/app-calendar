@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
-import { authenticate } from "@/lib/api/auth";
+import { canonicalJson, parseAttributionField, parseExternalRef } from "@/lib/api/attribution";
+import { authenticate, type ApiKey } from "@/lib/api/auth";
 import {
   alternativesFor,
   assertSlotBookable,
@@ -14,27 +15,16 @@ import {
   serializeBooking,
   type BookingRow,
 } from "@/lib/api/bookings";
-import { bookingTarget, loadCalendar, resolveService, type CalendarCtx } from "@/lib/api/calendars";
-import { ApiError, handler, json, optString, readJson, type Ctx } from "@/lib/api/http";
+import { bookingTarget, loadCalendar, loadContexts, resolveService, type CalendarCtx } from "@/lib/api/calendars";
+import { ApiError, handler, isUuid, json, optString, readJson, type Ctx } from "@/lib/api/http";
 import { MINUTE_MS, parseInstant } from "@/lib/api/time";
+import { scheduleBookingEvent } from "@/lib/api/webhooks";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { EventType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 // Crear en Nylas puede tardar; el límite por defecto de Vercel se queda corto.
 export const maxDuration = 30;
-
-/** JSON con las claves ordenadas: el mismo cuerpo da siempre el mismo hash. */
-function canonical(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
-  if (v && typeof v === "object") {
-    return `{${Object.keys(v as object)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(v ?? null);
-}
 
 const PG_UNIQUE = "23505";
 const PG_EXCLUSION = "23P01";
@@ -60,7 +50,7 @@ export const POST = handler<Record<string, never>>(async (req, ctx) => {
     throw new ApiError("invalid_request", "«Idempotency-Key» admite como mucho 255 caracteres.", { details: { field: "Idempotency-Key" } });
   }
   const { idempotency_key: _ignored, ...payload } = body;
-  const requestHash = createHash("sha256").update(canonical(payload)).digest("hex");
+  const requestHash = createHash("sha256").update(canonicalJson(payload)).digest("hex");
 
   // Validación de formato: no depende del momento ni de la agenda.
   const start = parseInstant(body.start, "start");
@@ -70,7 +60,8 @@ export const POST = handler<Record<string, never>>(async (req, ctx) => {
   }
   const attendee = parseAttendee(body.attendee);
   const notes = optString(body, "notes", 2000);
-  const externalRef = optString(body, "external_ref", 255);
+  const externalRef = parseExternalRef(body.external_ref);
+  const attribution = parseAttributionField(body.attribution);
 
   const cal = await loadCalendar(key, body.calendar_id);
   const durationIn = endIn ? Math.round((endIn.getTime() - start.getTime()) / MINUTE_MS) : null;
@@ -112,6 +103,7 @@ export const POST = handler<Record<string, never>>(async (req, ctx) => {
     idempotency_key: idem,
     request_hash: requestHash,
     external_ref: externalRef,
+    attribution,
   };
   const insert = () => db.from("bookings").insert(row).select("*").single();
   let { data: inserted, error } = await insert();
@@ -179,6 +171,7 @@ async function replay(
       // El webhook de Nylas la enlazó mientras esta petición no llegaba a confirmarla.
       const { data } = await db.from("bookings").update({ status: "confirmed" }).eq("id", row.id).eq("status", "pending").select("*").maybeSingle();
       current = (data as BookingRow | null) ?? { ...row, status: "confirmed" };
+      if (data) scheduleBookingEvent(row.id, "booking.created", "api");
     }
     return json(ctx, serializeBooking(cal, current), 200, { "Idempotent-Replayed": "true" });
   }
@@ -207,32 +200,133 @@ async function replay(
   return json(ctx, serializeBooking(cal, saved), 201);
 }
 
-/** Buscar citas por la referencia externa del integrador. */
+/**
+ * Dos modos:
+ *  - `?external_ref=…`: citas de una referencia del integrador (máx. 50, recientes primero).
+ *  - `?updated_since=<ISO con desfase>&limit=<1..200>&cursor=<opaco>`: listado
+ *    incremental (CONTRATO_CONVERSIONES §3.1.3) para sincronizar por pull.
+ */
 export const GET = handler<Record<string, never>>(async (req, ctx) => {
   const key = await authenticate(req);
-  const ref = new URL(req.url).searchParams.get("external_ref")?.trim();
+  const params = new URL(req.url).searchParams;
+  if (params.has("external_ref")) return byExternalRef(ctx, key, params.get("external_ref"));
+  return incremental(ctx, key, params);
+});
+
+/** Ids de los calendarios que ve la clave (también los desactivados); null = todos. */
+async function visibleClientIds(key: ApiKey): Promise<string[] | null> {
+  if (!key.agency_id) return null;
+  const { data, error } = await supabaseAdmin().from("clients").select("id").eq("agency_id", key.agency_id);
+  if (error) throw new Error(`visibleClientIds: ${error.message}`);
+  return (data ?? []).map((c) => c.id);
+}
+
+async function serializeRows(rows: BookingRow[]) {
+  const ctxs = await loadContexts(rows.map((r) => r.client_id));
+  return rows.flatMap((r) => {
+    const cal = ctxs.get(r.client_id);
+    return cal ? [serializeBooking(cal, r)] : [];
+  });
+}
+
+async function byExternalRef(ctx: Ctx, key: ApiKey, raw: string | null) {
+  let ref = raw?.trim() ?? "";
   if (!ref) {
     throw new ApiError("invalid_request", "Indica «external_ref».", { details: { field: "external_ref" } });
   }
-  const db = supabaseAdmin();
-  let q = db.from("bookings").select("*").eq("external_ref", ref).order("created_at", { ascending: false }).limit(50);
-  if (key.agency_id) {
-    const { data: own } = await db.from("clients").select("id").eq("agency_id", key.agency_id);
-    q = q.in("client_id", (own ?? []).map((c) => c.id));
+  // Una referencia en forma de objeto se guarda como JSON canónico: se busca igual.
+  if (ref.startsWith("{")) {
+    try {
+      const v = JSON.parse(ref);
+      if (v && typeof v === "object" && !Array.isArray(v)) ref = parseExternalRef(v) ?? ref;
+    } catch {
+      /* texto normal */
+    }
   }
+  const visible = await visibleClientIds(key);
+  if (visible && !visible.length) return json(ctx, { data: [] });
+  let q = supabaseAdmin().from("bookings").select("*").eq("external_ref", ref).order("created_at", { ascending: false }).limit(50);
+  if (visible) q = q.in("client_id", visible);
   const { data, error } = await q;
   if (error) throw new Error(`bookings by external_ref: ${error.message}`);
-  const rows = (data ?? []) as BookingRow[];
+  return json(ctx, { data: await serializeRows((data ?? []) as BookingRow[]) });
+}
 
-  const calendars = new Map<string, CalendarCtx>();
-  const out = [];
-  for (const r of rows) {
-    let cal = calendars.get(r.client_id);
-    if (!cal) {
-      cal = await loadCalendar(key, r.client_id);
-      calendars.set(r.client_id, cal);
-    }
-    out.push(serializeBooking(cal, r));
+const DEFAULT_LIMIT = 100;
+const MAX_LIMIT = 200;
+
+/** Instante de la base con toda su precisión (microsegundos), en UTC con «Z». */
+function rawInstant(v: string) {
+  return v.replace(/\+00(:?00)?$/, "Z");
+}
+
+function encodeCursor(r: BookingRow) {
+  return Buffer.from(JSON.stringify([rawInstant(r.updated_at), r.id])).toString("base64url");
+}
+
+function decodeCursor(raw: string): { at: string; id: string } {
+  const bad = () =>
+    new ApiError("invalid_request", "«cursor» no es válido: usa el next_cursor de la respuesta anterior tal cual.", {
+      details: { field: "cursor" },
+    });
+  try {
+    const v = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!Array.isArray(v) || v.length !== 2) throw bad();
+    const [at, id] = v;
+    if (typeof at !== "string" || !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(at) || Number.isNaN(Date.parse(at)) || !isUuid(id)) throw bad();
+    return { at, id };
+  } catch {
+    throw bad();
   }
-  return json(ctx, { data: out });
-});
+}
+
+/**
+ * Listado incremental. Orden (updated_at, id), paginado por cursor (sin saltos ni
+ * repeticiones entre páginas). Incluye citas confirmadas, reprogramadas y canceladas;
+ * no incluye las que se están creando (`pending`): aparecen cuando se confirman, porque
+ * confirmarlas cambia su updated_at.
+ *
+ * `updated_since` es inclusivo (>=). Recomendación para quien sincroniza: guardar el
+ * mayor `updated_at` recibido y pedir desde ahí menos un margen (p. ej. 2 minutos); con
+ * idempotencia por id, repetir alguna cita no cuesta nada y cubre transacciones que
+ * confirmen con un instante ligeramente anterior.
+ */
+async function incremental(ctx: Ctx, key: ApiKey, params: URLSearchParams) {
+  const cursorRaw = params.get("cursor")?.trim() || null;
+  const sinceRaw = params.get("updated_since")?.trim() || null;
+  if (!sinceRaw && !cursorRaw) {
+    throw new ApiError("invalid_request", "Indica «updated_since» (ISO 8601 con desfase) o «external_ref».", {
+      details: { field: "updated_since" },
+    });
+  }
+  const since = sinceRaw ? parseInstant(sinceRaw, "updated_since") : null;
+  const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+
+  const limitRaw = params.get("limit");
+  const limit = limitRaw === null || limitRaw === "" ? DEFAULT_LIMIT : Number(limitRaw);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    throw new ApiError("invalid_request", `«limit» debe ser un entero entre 1 y ${MAX_LIMIT}.`, { details: { field: "limit" } });
+  }
+
+  const visible = await visibleClientIds(key);
+  if (visible && !visible.length) return json(ctx, { data: [], next_cursor: null });
+
+  // Se pide uno de más para saber si hay otra página sin hacer otra consulta.
+  let q = supabaseAdmin()
+    .from("bookings")
+    .select("*")
+    .neq("status", "pending")
+    .order("updated_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(limit + 1);
+  if (visible) q = q.in("client_id", visible);
+  if (since) q = q.gte("updated_at", since.toISOString());
+  if (cursor) q = q.or(`updated_at.gt."${cursor.at}",and(updated_at.eq."${cursor.at}",id.gt.${cursor.id})`);
+  const { data, error } = await q;
+  if (error) throw new Error(`bookings incremental: ${error.message}`);
+
+  const rows = (data ?? []) as BookingRow[];
+  const page = rows.slice(0, limit);
+  const next = rows.length > limit ? encodeCursor(page[page.length - 1]) : null;
+  return json(ctx, { data: await serializeRows(page), next_cursor: next });
+}

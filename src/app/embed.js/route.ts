@@ -14,6 +14,10 @@ import { NextResponse } from "next/server";
  *   blanco o negro según el color, para que se lea.
  * - Solo se aceptan mensajes que vengan de la propia app y de su iframe.
  * - Al reservar se dispara en la página el evento `premium-calendar:booked`.
+ * - Atribución (CONTRATO_CONVERSIONES §3.1.2): lee los `utm_*` de la página que embebe;
+ *   si no hay, los de la cookie de primera parte `ips_utm` (JSON, 30 días), que se escribe
+ *   la primera vez que se ven UTM en ese dominio. Pasa a la página de reserva, en `pc_attr`,
+ *   la URL de la página, su referrer y esos UTM; la página los guarda con la cita.
  */
 export function GET() {
   const base = appUrl();
@@ -21,6 +25,18 @@ export function GET() {
   var s=document.currentScript; if(!s) return;
   var d=s.dataset, base=${JSON.stringify(base)}, origin=new URL(base).origin;
   var q="?embed=1"+(d.lang?"&lang="+encodeURIComponent(d.lang):"")+(d.estilo?"&estilo="+encodeURIComponent(d.estilo):"");
+  var UK=["source","medium","campaign","content","term"];
+  function readUtmCookie(){try{var m=document.cookie.match(/(?:^|; )ips_utm=([^;]*)/);return m?JSON.parse(decodeURIComponent(m[1])):null}catch(e){return null}}
+  function attribution(){
+    var qp=new URLSearchParams(location.search),utm={},has=false,at=new Date().toISOString();
+    UK.forEach(function(k){var v=qp.get("utm_"+k);v=v?String(v).trim().slice(0,200):"";utm[k]=v||null;if(v)has=true});
+    var c=readUtmCookie();
+    if(has){if(!c){try{document.cookie="ips_utm="+encodeURIComponent(JSON.stringify({utm:utm,captured_at:at}))+"; max-age=2592000; path=/; SameSite=Lax"+(location.protocol==="https:"?"; Secure":"")}catch(e){}}}
+    else if(c&&c.utm){UK.forEach(function(k){utm[k]=typeof c.utm[k]==="string"&&c.utm[k]?c.utm[k].slice(0,200):null});if(c.captured_at)at=c.captured_at}
+    return {page_url:String(location.href).slice(0,2000),referrer:document.referrer?String(document.referrer).slice(0,2000):null,utm:utm,captured_at:at};
+  }
+  function b64u(o){return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"")}
+  try{q+="&pc_attr="+b64u(attribution())}catch(e){}
   var url=base+"/"+encodeURIComponent(d.client||"")+(d.event?"/"+encodeURIComponent(d.event):"")+q;
   var mode=d.mode||"inline";
   function lum(hex){var h=String(hex||"").replace("#","");if(h.length===3)h=h.replace(/(.)/g,"$1$1");if(!/^[0-9a-f]{6}$/i.test(h))return 0.1;
