@@ -53,3 +53,7 @@ alter table public.booking_attribution_pending enable row level security;
 -- ===== api_keys_webhook_notify_all =====
 alter table public.api_keys
   add column webhook_notify_all_sources boolean not null default false;
+
+-- ===== bookings_external_event_id_idx (PC-01c, 24/09/2026) =====
+create index if not exists bookings_external_event_id_idx
+  on public.bookings (external_event_id) where external_event_id is not null;

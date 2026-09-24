@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { releaseAbandonedPending } from "@/lib/api/booking-flow";
 import type { BookingRow } from "@/lib/api/bookings";
 import { scheduleBookingEvent, type OutboundType } from "@/lib/api/webhooks";
 import { takePendingAttribution } from "@/lib/booking-attribution";
+import { handleCalendarEventChange } from "@/lib/calendar-sync";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { updateEventTitle } from "@/lib/nylas";
 
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
 
   const evt = JSON.parse(raw);
   const type: string = evt.type ?? "";
-  console.log("[webhook] recibido:", type);
+  if (!type.startsWith("event.")) console.log("[webhook] recibido:", type);
   const d: Json = evt.data?.object ?? {};
   const db = supabaseAdmin();
 
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
         // Cómo estaba antes, para saber qué ha cambiado (Nylas puede repetir un aviso).
         const { data: before } = await db
           .from("bookings")
-          .select("id, status, start_at, end_at")
+          .select("id, status, start_at, end_at, cancelled_at, cancel_reason")
           .eq("nylas_booking_id", bookingId)
           .maybeSingle();
         const upsert = () =>
@@ -195,8 +196,14 @@ export async function POST(req: NextRequest) {
               status,
               external_event_id: eventId ?? null,
               meeting_url: location.startsWith("http") ? location : null,
-              cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
-              cancel_reason: cancelReason,
+              // Si ya estaba cancelada (p. ej. por un rechazo en el calendario), se conservan
+              // la hora y el motivo de esa cancelación: el aviso de Nylas es solo el eco.
+              cancelled_at:
+                status === "cancelled"
+                  ? (before?.status === "cancelled" && before.cancelled_at) || new Date().toISOString()
+                  : null,
+              cancel_reason:
+                status === "cancelled" ? cancelReason ?? (before?.status === "cancelled" ? before.cancel_reason : null) : cancelReason,
               source: "web",
             },
             { onConflict: "nylas_booking_id" }
@@ -243,6 +250,13 @@ export async function POST(req: NextRequest) {
     } else if (et && start && end && !bookingId) {
       console.error("[webhook] el aviso no trae booking_id; no se puede guardar sin clave.");
     }
+  }
+
+  // Cambios hechos directamente en el calendario (el invitado rechaza la invitación, el
+  // profesional borra o mueve el evento). Llegan por cada evento de los calendarios
+  // conectados: se responde enseguida y se procesa después.
+  if (type === "event.updated" || type === "event.deleted") {
+    after(() => handleCalendarEventChange(type, d));
   }
 
   if (type === "grant.expired" || type === "grant.deleted") {

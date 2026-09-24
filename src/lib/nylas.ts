@@ -383,12 +383,26 @@ export function decodeBookingRef(ref: string): { configurationId: string; bookin
   }
 }
 
+export type NylasEventParticipant = { email?: string; name?: string; status?: "yes" | "no" | "maybe" | "noreply" | string };
+export type NylasEvent = {
+  id: string;
+  title?: string;
+  description?: string | null;
+  status?: "confirmed" | "tentative" | "cancelled" | string;
+  participants?: NylasEventParticipant[];
+  when?: { start_time?: number; end_time?: number; object?: string };
+};
+
 export async function getEvent(grantId: string, calendarId: string, eventId: string) {
   const qs = new URLSearchParams({ calendar_id: calendarId });
-  const r = await nylas<{ data: { id: string; title?: string; description?: string | null } }>(
-    `/v3/grants/${grantId}/events/${eventId}?${qs}`
-  );
+  const r = await nylas<{ data: NylasEvent }>(`/v3/grants/${grantId}/events/${eventId}?${qs}`);
   return r.data;
+}
+
+/** Borra un evento del calendario del profesional (respaldo si el Scheduler no deja cancelar). */
+export async function deleteEvent(grantId: string, calendarId: string, eventId: string, notifyParticipants = false) {
+  const qs = new URLSearchParams({ calendar_id: calendarId, notify_participants: String(notifyParticipants) });
+  await nylas(`/v3/grants/${grantId}/events/${eventId}?${qs}`, { method: "DELETE" });
 }
 
 export async function updateEvent(

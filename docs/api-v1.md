@@ -283,8 +283,8 @@ Premium Calendar hace un `POST` a vuestra URL cuando cambia una cita. Qué se av
 
 | `notify_all_sources` | Qué avisos llegan |
 |---|---|
-| `false` (por defecto) | `booking.cancelled` y `booking.rescheduled` de las citas creadas con vuestra clave, cuando cambian **fuera de la API** (el visitante usa el enlace del correo o los de `manage`). Los cambios hechos por la propia API no generan aviso. |
-| `true` | `booking.created`, `booking.rescheduled` y `booking.cancelled` de **todos** los calendarios que ve la clave, **sea cual sea el origen**: página pública, API (con cualquier clave, también la vuestra) o enlace del correo. |
+| `false` (por defecto) | `booking.cancelled` y `booking.rescheduled` de las citas creadas con vuestra clave, cuando cambian **fuera de la API** (el visitante usa el enlace del correo o los de `manage`, rechaza la invitación del calendario, o el profesional borra o mueve el evento). Los cambios hechos por la propia API no generan aviso. |
+| `true` | `booking.created`, `booking.rescheduled` y `booking.cancelled` de **todos** los calendarios que ve la clave, **sea cual sea el origen**: página pública, API (con cualquier clave, también la vuestra), enlace del correo o cambio hecho directamente en el calendario (ver «Límites conocidos»). |
 
 - `PUT /webhook` con `{ "url": "https://…", "notify_all_sources": true }` — configura la URL y devuelve el `secret` de firma. `notify_all_sources` es opcional: si no se envía, se conserva el que había. Cambiar la URL conserva el secreto; `"rotate_secret": true` genera uno nuevo.
 - `GET /webhook` — URL actual y `notify_all_sources` (sin el secreto). `DELETE /webhook` — lo desactiva.
@@ -329,6 +329,10 @@ En las reservas hechas en la página pública, `attribution` se rellena sola:
 
 - El email del visitante es obligatorio.
 - Un profesional por servicio. El contrato ya devuelve listas de profesionales para cuando haya varios.
-- Si el profesional borra o mueve el evento directamente en Google Calendar, no llega ningún aviso: el proveedor solo avisa de cambios hechos por sus enlaces o por esta API.
+- Cambios hechos directamente en el calendario (desde el 24/09/2026):
+  - si el **invitado rechaza** la invitación («No»), la cita se **cancela** (motivo «El invitado rechazó la invitación del calendario»), se quita de la agenda del profesional y se avisa `booking.cancelled`. Es definitivo: si luego acepta, tiene que reservar de nuevo. «Quizás» no cambia nada;
+  - si el **profesional borra** el evento, la cita queda cancelada (motivo «El profesional eliminó el evento de su calendario») y se avisa `booking.cancelled`;
+  - si el **profesional lo mueve** de hora, la cita pasa a la hora nueva, queda `rescheduled` y se avisa `booking.rescheduled`.
+  - Tarda lo que el calendario en sincronizar con el proveedor (normalmente segundos o pocos minutos). Las citas ya pasadas no se tocan.
 - Los correos de confirmación salen todavía con la marca del proveedor de calendario.
 - La antelación mínima para cancelar o cambiar es de 120 minutos, igual para la web y para la API.
