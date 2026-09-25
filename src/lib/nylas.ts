@@ -193,6 +193,12 @@ export function buildConfiguration(
         ])
       ),
       email_template: {
+        // Identidad del negocio en el correo de confirmación: su logo en lugar del de
+        // Nylas, sin el pie «Powered by Nylas» y en el idioma del negocio. El remitente
+        // (no-reply@notify.nyl.as) y la maquetación son de Nylas y no se pueden cambiar.
+        ...(client.branding.logo_url ? { logo: client.branding.logo_url } : {}),
+        show_nylas_branding: false,
+        organizer_locale: client.locale === "en" ? "en" : "es",
         booking_confirmed: {
           title: `Cita confirmada — ${client.name}`,
           body: "Tu cita ha quedado registrada. Recibirás un recordatorio antes de la fecha.",

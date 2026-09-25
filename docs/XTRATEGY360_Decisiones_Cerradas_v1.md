@@ -1,4 +1,4 @@
-# Xtrategy360 · Decisiones cerradas de arquitectura (v1.1)
+# Xtrategy360 · Decisiones cerradas de arquitectura (v1.2)
 
 **Fecha:** 22 de septiembre de 2026 · **Propietario:** Ideas Premium Solutions (IPS)
 **Alcance:** Xtrategy360 y las reglas de la suite que afectan a Xplore360, Premium Chatbots y Premium Calendar.
@@ -14,6 +14,18 @@ Plataforma central de **inteligencia, estrategia, medición y optimización de m
 Producto de **IPS**, con **marca blanca por agencia**. Feeling Comunicación es la agencia piloto, con **3 negocios a activar de inmediato**.
 
 Xtrategy360 **posee la inteligencia** (Marketing Brain, Strategy Engine, priorización, Campaign Planning, Insights & Optimization, Strategy Review). Las capacidades estandarizadas se compran o las prestan las demás apps de la suite.
+
+## 1-bis. Nombres y dominios de la suite *(1.2)*
+
+| App | Nombre comercial | Dominio | Nombre anterior (interno en dosieres y código) |
+|---|---|---|---|
+| Diagnóstico | **Xplore360** | `xplore360.ai` (front en `auditorias.xplore360.ai`) | — |
+| Plataforma central | **Xtrategy360** | `xtrategy360.ai` (por reservar) | — |
+| Reservas | **Calendars360** | `calendars360.ai` | Premium Calendar |
+| Chatbots | **Chatbots360** | `chatbots360.ai` | Premium Chatbots |
+| Contenidos (Fase 2) | **Creators360** | `creators360.ai` (por reservar) | Generador de contenidos |
+
+Reglas: los nombres comerciales cambian; **no cambian** los identificadores internos (`app` en `business_links`: `calendar`, `chatbots`; prefijos de clave `pc_live_`, `xt_live_`, `xp_live_`; slugs; `business_id`). Los dominios se activan **antes** de instalar widgets o embeds en las webs de los negocios, para no tener que volver a tocarlas. La verificación de Google OAuth de Calendars360 se hace sobre `calendars360.ai`; una vez enviada, el dominio no se cambia.
 
 ## 2. Vocabulario de la suite
 
@@ -142,6 +154,7 @@ Cada app tiene su **propio proyecto Supabase**. Ninguna app accede a las tablas 
 
 - Herramienta de email marketing de Feeling (define la fuente 6 de Windsor).
 - Selección del SaaS de landing pages.
+- Reservar `xtrategy360.ai` y `creators360.ai`; apuntar `calendars360.ai` y `chatbots360.ai` a Vercel (fichas PC-02 y CB-02).
 - Verificación del plan y API de Metricool.
 - Estado de la app de Google OAuth de Premium Calendar (en Prueba: bloquea clientes reales).
 
@@ -153,4 +166,5 @@ Cada app tiene su **propio proyecto Supabase**. Ninguna app accede a las tablas 
 |---|---|---|
 | 1.0 | 22 sept. 2026 | Documento inicial, consolidando las decisiones de las sesiones de análisis |
 | 1.0.1 | 23 sept. 2026 | Confirmada región `eu-west-3` de Xplore360; retirado del listado de pendientes |
+| 1.2 | 24 sept. 2026 | §1-bis: nombres comerciales y dominios de la suite (Calendars360, Chatbots360, Creators360); regla de que los identificadores internos no cambian |
 | 1.1 | 23 sept. 2026 | §3: los dos papeles de IPS (plataforma vs. agencia `ideas-premium`). §4: excepción documentada del `business_id` de pruebas `00000000-0000-4000-8000-000000000001` |
