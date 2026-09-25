@@ -40,7 +40,7 @@ const str = (v: unknown) => String(v ?? "").trim();
 const opt = (v: unknown) => str(v) || null;
 const slugOf = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60);
-const RESERVED = new Set(["admin", "api", "auth", "cita", "r", "embed.js", "_next", "favicon.ico", "robots.txt"]);
+const RESERVED = new Set(["admin", "api", "auth", "cita", "r", "privacidad", "terminos", "privacy", "terms", "embed.js", "_next", "favicon.ico", "robots.txt"]);
 
 /** La página pública busca el negocio solo por su dirección: tiene que ser única entre todas las agencias. */
 async function slugTaken(slug: string, exceptId?: string): Promise<boolean> {

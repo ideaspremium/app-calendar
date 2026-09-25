@@ -2,7 +2,7 @@ import { requireAgency } from "@/lib/admin/context";
 import { InviteForm, TeamTable, type Person } from "@/components/admin/Team";
 import { Notice } from "@/components/admin/ui";
 
-export const metadata = { title: "Equipo · Premium Calendar" };
+export const metadata = { title: "Equipo · Calendars360" };
 
 function ago(iso: string | null): string {
   if (!iso) return "";

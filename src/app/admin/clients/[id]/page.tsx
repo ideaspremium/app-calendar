@@ -141,7 +141,7 @@ export default async function Negocio({
               <div className="ch">
                 <div>
                   <h2>Para la API</h2>
-                  <p>Identificadores que usa Premium Chatbots.</p>
+                  <p>Identificadores que usa Chatbots360 (y cualquier integración por API).</p>
                 </div>
               </div>
               <div className="cb ids">

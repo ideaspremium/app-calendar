@@ -63,7 +63,7 @@ export default function Login() {
         <div className="brand" style={{ padding: 0 }}>
           <span className="lg">{I.logo}</span>
           <div>
-            <b>Premium Calendar</b>
+            <b>Calendars360</b>
             <small>Panel de agencia</small>
           </div>
         </div>

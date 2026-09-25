@@ -1,7 +1,7 @@
 import { requireAgency } from "@/lib/admin/context";
 import { AgencySettings } from "@/components/admin/AgencyForms";
 
-export const metadata = { title: "Ajustes · Premium Calendar" };
+export const metadata = { title: "Ajustes · Calendars360" };
 
 export default async function Ajustes() {
   const ctx = await requireAgency();

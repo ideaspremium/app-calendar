@@ -7,7 +7,7 @@ import { ClientTile, Empty } from "@/components/admin/bits";
 import { I } from "@/components/admin/icons";
 import LinkPending from "@/components/admin/LinkPending";
 
-export const metadata = { title: "Negocios · Premium Calendar" };
+export const metadata = { title: "Negocios · Calendars360" };
 
 export default async function Negocios() {
   const ctx = await requireAgency();

@@ -120,7 +120,7 @@ export default function Shell({ children, email, agencies, current, isPlatform, 
         <div className="brand">
           <span className="lg">{I.logo}</span>
           <div>
-            <b>Premium Calendar</b>
+            <b>Calendars360</b>
             <small>Panel de agencia</small>
           </div>
         </div>

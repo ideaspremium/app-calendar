@@ -5,7 +5,7 @@ import Shell from "@/components/admin/Shell";
 import { getAdminContext, ROLE_LABEL } from "@/lib/admin/context";
 import { LIVE_STATUSES } from "@/lib/admin/data";
 
-export const metadata: Metadata = { title: "Panel · Premium Calendar", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Panel · Calendars360", robots: { index: false, follow: false } };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getAdminContext();

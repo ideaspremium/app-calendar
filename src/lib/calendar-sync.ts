@@ -3,7 +3,7 @@ import { cancelSchedulerBooking, deleteEvent, getEvent, NylasApiError, type Nyla
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
- * Cambios hechos fuera de Premium Calendar sobre el evento de una cita, que Nylas avisa
+ * Cambios hechos fuera de Calendars360 sobre el evento de una cita, que Nylas avisa
  * con `event.updated` / `event.deleted` (no generan `booking.*`):
  *
  *  - El **invitado rechaza** la invitación de Google Calendar («No»): la cita se cancela,

@@ -11,7 +11,7 @@ import { CopyButton } from "@/components/admin/ui";
 import { I } from "@/components/admin/icons";
 import LinkPending from "@/components/admin/LinkPending";
 
-export const metadata = { title: "Citas · Premium Calendar" };
+export const metadata = { title: "Citas · Calendars360" };
 
 type SP = BookingFilters & { zona?: string; cita?: string };
 const LIMIT = 300;

@@ -1,8 +1,8 @@
-# API v1 de Premium Calendar
+# API v1 de Calendars360
 
-API servidor a servidor para que un agente (Premium Chatbots en n8n, por ejemplo) consulte huecos y gestione citas en los calendarios de los clientes. Premium Calendar es el único interlocutor: el integrador nunca habla con Google, Outlook ni Nylas.
+API servidor a servidor para que un agente (Chatbots360 en n8n, por ejemplo) consulte huecos y gestione citas en los calendarios de los clientes. Calendars360 es el único interlocutor: el integrador nunca habla con Google, Outlook ni Nylas.
 
-- **URL base:** `https://app-calendar-gold.vercel.app/api/v1`
+- **URL base:** `https://calendars360.ai/api/v1`. Durante la transición sigue respondiendo también `https://app-calendar-gold.vercel.app/api/v1`.
 - **Formato:** JSON en UTF-8.
 - **Versión:** los códigos de error, los nombres de campo y los identificadores son contrato. Se pueden añadir campos y códigos nuevos; los existentes no cambian.
 
@@ -14,7 +14,7 @@ Clave de API en cada petición:
 Authorization: Bearer pc_live_…
 ```
 
-También se acepta la cabecera `X-API-Key`. Cada clave pertenece a una agencia y solo ve los calendarios de esa agencia; una clave de plataforma ve todos. Premium Calendar solo guarda el sha256 de la clave: si se pierde, se emite otra. No hay OAuth ni nada por usuario final.
+También se acepta la cabecera `X-API-Key`. Cada clave pertenece a una agencia y solo ve los calendarios de esa agencia; una clave de plataforma ve todos. Calendars360 solo guarda el sha256 de la clave: si se pierde, se emite otra. No hay OAuth ni nada por usuario final.
 
 ## Reglas comunes
 
@@ -177,7 +177,7 @@ Cabecera obligatoria: `Idempotency-Key`, hasta 255 caracteres, **una por intento
 - `notes` (hasta 2000 caracteres) queda en la cita y en la descripción del evento de la agenda del profesional, junto con el teléfono.
 - `external_ref`: texto libre (hasta 255: vuestro id de lead o de conversación) **o** un objeto JSON. Para los integradores de la suite se **recomienda** el objeto de la convención de `CONTRATO_CONVERSIONES` §2, que cierra la cadena campaña → lead → reserva sin inferencias:
   ```json
-  { "suite": "ips", "contract": "conversiones-1.0", "business_id": "uuid", "lead_id": "uuid del lead en Premium Chatbots",
+  { "suite": "ips", "contract": "conversiones-1.0", "business_id": "uuid", "lead_id": "uuid del lead en Chatbots360",
     "campaign_id": "code de campaña", "asset_id": "utm_content del activo", "origin_app": "chatbots" }
   ```
   Las claves sin valor se omiten. Se devuelve tal como se envió (objeto → objeto, texto → texto).
@@ -206,9 +206,9 @@ Respuesta `201`:
   "external_ref": "lead_42",
   "source": "api",
   "manage": {
-    "manage_url": "https://app-calendar-gold.vercel.app/cita/3f9c…",
-    "reschedule_url": "https://app-calendar-gold.vercel.app/cita/3f9c…/reprogramar",
-    "cancel_url": "https://app-calendar-gold.vercel.app/cita/3f9c…/cancelar"
+    "manage_url": "https://calendars360.ai/cita/3f9c…",
+    "reschedule_url": "https://calendars360.ai/cita/3f9c…/reprogramar",
+    "cancel_url": "https://calendars360.ai/cita/3f9c…/cancelar"
   },
   "cancelled_at": null,
   "cancel_reason": null,
@@ -279,7 +279,7 @@ Regla práctica para el agente: generar la clave cuando el visitante dice «sí�
 
 ## Avisos salientes (webhook)
 
-Premium Calendar hace un `POST` a vuestra URL cuando cambia una cita. Qué se avisa depende de `notify_all_sources`:
+Calendars360 hace un `POST` a vuestra URL cuando cambia una cita. Qué se avisa depende de `notify_all_sources`:
 
 | `notify_all_sources` | Qué avisos llegan |
 |---|---|

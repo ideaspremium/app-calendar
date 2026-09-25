@@ -4,7 +4,7 @@ import { getAdminContext } from "@/lib/admin/context";
 import { NewAgency } from "@/components/admin/AgencyForms";
 import { I } from "@/components/admin/icons";
 
-export const metadata = { title: "Crear agencia · Premium Calendar" };
+export const metadata = { title: "Crear agencia · Calendars360" };
 
 export default async function NuevaAgencia() {
   const ctx = await getAdminContext();

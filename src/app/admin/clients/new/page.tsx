@@ -7,7 +7,7 @@ import { Notice, ZoneField } from "@/components/admin/ui";
 import { I } from "@/components/admin/icons";
 import LinkPending from "@/components/admin/LinkPending";
 
-export const metadata = { title: "Nuevo negocio · Premium Calendar" };
+export const metadata = { title: "Nuevo negocio · Calendars360" };
 
 export default async function NuevoNegocio({ searchParams }: { searchParams: Promise<{ error?: string; name?: string }> }) {
   const { error, name } = await searchParams;
