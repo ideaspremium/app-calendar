@@ -13,7 +13,7 @@ export const LEGAL = {
   address: "1222 SE 47th St., Suite C-1, Cape Coral, FL 33904, EE. UU." as string | null,
   /** Número fiscal (CIF/NIF, EIN…). */
   taxId: "EIN 33-4355264" as string | null,
-  email: "jab@ideaspremium.com",
+  email: "soporte@ideaspremium.com",
   /** Ley aplicable a los términos (texto que sigue a «se rigen por…» / «are governed by…»). */
   jurisdiction: {
     es: "las leyes del estado de Florida (EE. UU.), sin perjuicio de los derechos que la ley de su país de residencia reconozca a los consumidores",
