@@ -8,14 +8,17 @@ export const LEGAL = {
   domain: "calendars360.ai",
   company: "Ideas Premium Solutions",
   /** Forma jurídica y datos registrales, p. ej. «Ideas Premium Solutions LLC». */
-  legalName: null as string | null,
+  legalName: "Ideas Premium Solutions, Inc." as string | null,
   /** Domicilio postal completo. */
-  address: null as string | null,
+  address: "1222 SE 47th St., Suite C-1, Cape Coral, FL 33904, EE. UU." as string | null,
   /** Número fiscal (CIF/NIF, EIN…). */
-  taxId: null as string | null,
+  taxId: "EIN 33-4355264" as string | null,
   email: "jab@ideaspremium.com",
-  /** Ley y tribunales aplicables a los términos, p. ej. «España, tribunales de Santa Cruz de Tenerife». */
-  jurisdiction: null as string | null,
+  /** Ley aplicable a los términos (texto que sigue a «se rigen por…» / «are governed by…»). */
+  jurisdiction: {
+    es: "las leyes del estado de Florida (EE. UU.), sin perjuicio de los derechos que la ley de su país de residencia reconozca a los consumidores",
+    en: "the laws of the State of Florida (USA), without prejudice to the rights that consumers have under the law of their country of residence",
+  } as { es: string; en: string } | null,
   updated: { es: "24 de septiembre de 2026", en: "September 24, 2026" },
 };
 

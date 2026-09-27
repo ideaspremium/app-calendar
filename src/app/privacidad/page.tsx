@@ -157,7 +157,7 @@ export default function Privacidad() {
           Puedes pedir acceso, rectificación, supresión, limitación, oposición y portabilidad de tus datos escribiendo a{" "}
           {mail}. Si reservaste una cita, también puedes dirigirte al negocio, que es su responsable; si nos escribes a
           nosotros, se lo trasladaremos. Si crees que no hemos atendido bien tu solicitud, puedes reclamar ante la autoridad
-          de protección de datos, en España la Agencia Española de Protección de Datos (aepd.es).
+          de protección de datos de tu país; en España, la Agencia Española de Protección de Datos (aepd.es).
         </p>
 
         <h2>9. Seguridad</h2>

@@ -81,7 +81,7 @@ export default function Terminos() {
         <h2>9. Contacto{LEGAL.jurisdiction ? " y ley aplicable" : ""}</h2>
         <p>
           Para cualquier consulta sobre estos términos: {mail}.
-          {LEGAL.jurisdiction ? ` Estos términos se rigen por la ley de ${LEGAL.jurisdiction}.` : ""}
+          {LEGAL.jurisdiction ? ` Estos términos se rigen por ${LEGAL.jurisdiction.es}.` : ""}
         </p>
 
         <hr />
@@ -152,7 +152,7 @@ export default function Terminos() {
           <h2>9. Contact{LEGAL.jurisdiction ? " and governing law" : ""}</h2>
           <p>
             For any question about these terms: {mail}.
-            {LEGAL.jurisdiction ? ` These terms are governed by the law of ${LEGAL.jurisdiction}.` : ""}
+            {LEGAL.jurisdiction ? ` These terms are governed by ${LEGAL.jurisdiction.en}.` : ""}
           </p>
         </section>
       </main>
