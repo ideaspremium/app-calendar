@@ -1,6 +1,6 @@
 # Contrato · Conversiones → Xtrategy360
 
-**Versión 1.1** · 24 de septiembre de 2026 · Ideas Premium Solutions
+**Versión 1.2** · 28 de septiembre de 2026 · Ideas Premium Solutions
 **Emisores:** Premium Calendar (reservas) · SaaS de landing pages (formularios) · Premium Chatbots (reservas creadas por bots, vía Calendar) · futuros (CRM, comercio).
 **Consumidor:** Xtrategy360.
 
@@ -53,7 +53,7 @@ Claves ausentes se omiten; no se envían vacías. `utm.campaign` y `external_ref
 
 Precisiones 1.1 del listado incremental: `updated_since` es inclusivo (`>=`); `limit` por defecto 100; con `cursor` no hace falta repetir `updated_since`; `next_cursor = null` cuando no hay más; no incluye citas en creación (`pending`), que aparecen al confirmarse; incluye citas de negocios desactivados. **Regla de pull:** pedir desde `max(updated_at) recibido − 2 minutos`; la idempotencia por `(source, source_id)` absorbe las repeticiones.
 
-**URL base de la API** *(1.1.1)*: `https://calendars360.ai/api/v1`; durante la transición sigue respondiendo `https://app-calendar-gold.vercel.app/api/v1`.
+**URL base de la API** *(1.1.1)*: `https://calendars360.ai/api/v1`; durante la transición sigue respondiendo `https://app-calendar-gold.vercel.app/api/v1` (las rutas `/api/…` **no** se redirigen con 301 porque los POST no siguen redirecciones; todo lo demás sí). Xtrategy360 usa siempre el dominio nuevo.
 
 ### 3.2 Objeto de reserva (lo que Xtrategy360 recibe)
 
@@ -104,7 +104,7 @@ Fechas siempre ISO 8601 con desfase (regla ya vigente en Calendar). `business_id
 ### 3.4 Transporte
 
 - **Pull** cada 5 minutos con `updated_since = cursor` (guardado en `ingest_cursors(source='calendar_bookings')`), red de seguridad.
-- **Webhook** como acelerador: Xtrategy360 expone `POST /api/webhooks/calendar`, verifica la firma `t=<epoch>,v1=HMAC-SHA256(secreto, "t.cuerpo")` y rechaza si `t` supera 5 minutos. Procesa con el mismo `upsert` que el pull. Responde `200` en menos de 5 s; el trabajo pesado va en cola. *(1.1)* El sobre lleva `event`, `occurred_at` y `data` (el objeto de cita) más `id` (identifica el **aviso**, uno por envío), `type` (= `event`) y `created_at` (instante del envío). La identidad de la cita es `data.id`. Reintentos del emisor: 3 (inmediato, 1 s, 3 s), 5 s de espera cada uno, firma recalculada en cada intento.
+- **Webhook** como acelerador: Xtrategy360 expone `POST /api/webhooks/calendar`, verifica la firma `t=<epoch>,v1=HMAC-SHA256(secreto, "t.cuerpo")` y rechaza si `t` supera 5 minutos. Procesa con el mismo `upsert` que el pull. Responde `200` en menos de 5 s; el trabajo pesado va en cola. *(1.1)* El sobre lleva `event`, `occurred_at` y `data` (el objeto de cita) más `id` (identifica el **aviso**, uno por envío), `type` (= `event`) y `created_at` (instante del envío). La identidad de la cita es `data.id`. Reintentos del emisor: 3 (inmediato, 1 s, 3 s), 5 s de espera cada uno, firma recalculada en cada intento. *(1.2)* La firma viaja en la cabecera **`X-PremiumCalendar-Signature`** (formato `t=<epoch>,v1=<hex>`) y el tipo de evento en **`X-PremiumCalendar-Event`**; los nombres de cabecera se conservan tras el cambio a Calendars360. El receptor se registra en `PUT https://calendars360.ai/api/v1/webhook`.
 - Una reserva que llega por webhook y luego por pull es la misma fila: idempotencia por `(source, source_id)`.
 
 ### 3.5 Bots que reservan (Chatbots → Calendar, Fase 2)
@@ -153,7 +153,7 @@ Reglas:
 4. Una cancelación no borra: cambia `status` y conserva la fila para medir tasa de cancelación.
 5. El `value` solo se rellena si el emisor lo envía; nunca se estima.
 6. Toda conversión sin `campaign_id` cuenta igualmente en `conversions_total`; la atribución es progresiva, no una condición de registro.
-7. *(1.1)* **Límite conocido de Calendar:** si el invitado rechaza la invitación en Google Calendar o el profesional borra o mueve el evento en su agenda, Premium Calendar no se entera: no hay aviso ni cambio en el listado. `booking_cancel_rate` mide solo cancelaciones por API o por los enlaces del correo. Xtrategy360 lo declara en la definición del KPI.
+7. *(1.2, sustituye al límite de 1.1)* **Cambios hechos en el calendario del profesional se detectan** (anexo PC-01c): si el invitado rechaza la invitación de Google, la cita pasa a `cancelled` con `cancel_reason = "El invitado rechazó la invitación del calendario"`; si el profesional borra el evento, `cancelled` con `cancel_reason = "El profesional eliminó el evento de su calendario"`; si lo mueve de hora, `rescheduled` con `start_at`/`end_at` nuevos. Llegan por aviso y por listado (cambia `updated_at`), con segundos o pocos minutos de retraso. Un rechazo es definitivo. Las citas pasadas no se tocan. **`cancel_reason` distingue el origen de la cancelación** (visitante por enlace o API, rechazo de invitación, borrado por el profesional); Xtrategy360 lo conserva en `conversions.raw` y lo usa para desglosar `booking_cancel_rate`.
 
 ## 6. Evolución
 
@@ -164,5 +164,6 @@ Cambios menores → 1.x. Cambios de forma del objeto o de la ruta → 2.0, con p
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 23 sept. 2026 | Contrato inicial: convención de atribución, listado incremental y webhook total en Calendar, endpoint genérico de conversiones |
+| 1.2 | 28 sept. 2026 | Cierre PC-02 y anexo PC-01c: las cancelaciones y cambios hechos en el calendario del profesional se detectan (`cancel_reason` con origen); cabeceras `X-PremiumCalendar-Signature`/`-Event`; registro del receptor en `calendars360.ai`; `/api` sin redirección desde el dominio antiguo |
 | 1.1.1 | 24 sept. 2026 | Cosmético: nombres Calendars360/Chatbots360 y URL base `calendars360.ai` |
 | 1.1 | 24 sept. 2026 | Cierre PC-01: objeto y sobre en superconjunto; `external_ref` texto u objeto; configuración del receptor por Xtrategy360 con su clave y secreto entregado una sola vez; precisiones del listado y regla de pull (−2 min); tiempos de la atribución web y cookie de primer contacto; reintentos del aviso; límite de cancelaciones no detectables |
