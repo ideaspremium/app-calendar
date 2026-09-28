@@ -15,9 +15,11 @@ import { NextResponse } from "next/server";
  * - Solo se aceptan mensajes que vengan de la propia app y de su iframe.
  * - Al reservar se dispara en la página el evento `premium-calendar:booked`.
  * - Atribución (CONTRATO_CONVERSIONES §3.1.2): lee los `utm_*` de la página que embebe;
- *   si no hay, los de la cookie de primera parte `ips_utm` (JSON, 30 días), que se escribe
- *   la primera vez que se ven UTM en ese dominio. Pasa a la página de reserva, en `pc_attr`,
- *   la URL de la página, su referrer y esos UTM; la página los guarda con la cita.
+ *   si no hay, los de la cookie de primera parte `ips_utm` (JSON `{utm, captured_at}`, 30
+ *   días, compartida con el widget de Chatbots360), que se escribe solo si no existe y nunca
+ *   se sobrescribe. Pasa a la página de reserva, en `pc_attr`, la URL de la página, su
+ *   referrer, esos UTM y `first_touch_at` (el captured_at de la cookie). Atribución común
+ *   de la suite (CONVERSIONES 1.3 / LEADS 1.2).
  */
 export function GET() {
   const base = appUrl();
@@ -26,14 +28,21 @@ export function GET() {
   var d=s.dataset, base=${JSON.stringify(base)}, origin=new URL(base).origin;
   var q="?embed=1"+(d.lang?"&lang="+encodeURIComponent(d.lang):"")+(d.estilo?"&estilo="+encodeURIComponent(d.estilo):"");
   var UK=["source","medium","campaign","content","term"];
-  function readUtmCookie(){try{var m=document.cookie.match(/(?:^|; )ips_utm=([^;]*)/);return m?JSON.parse(decodeURIComponent(m[1])):null}catch(e){return null}}
+  function iso(d){function p(n){return (n<10?"0":"")+n}var o=-d.getTimezoneOffset(),g=o>=0?"+":"-";o=Math.abs(o);
+    return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())+g+p(Math.floor(o/60))+":"+p(o%60)}
+  function clean(x){x=typeof x==="string"?x.trim().slice(0,200):"";return x||null}
+  function readUtmCookie(){try{var m=document.cookie.match(/(?:^|; )ips_utm=([^;]*)/);if(!m)return null;
+    var v=JSON.parse(decodeURIComponent(m[1]));if(!v||typeof v!=="object")return null;
+    var src=v.utm&&typeof v.utm==="object"?v.utm:v,u={};
+    UK.forEach(function(k){u[k]=clean(typeof src[k]==="string"?src[k]:src["utm_"+k])});
+    return {utm:u,captured_at:typeof v.captured_at==="string"?v.captured_at:null}}catch(e){return null}}
   function attribution(){
-    var qp=new URLSearchParams(location.search),utm={},has=false,at=new Date().toISOString();
-    UK.forEach(function(k){var v=qp.get("utm_"+k);v=v?String(v).trim().slice(0,200):"";utm[k]=v||null;if(v)has=true});
+    var qp=new URLSearchParams(location.search),utm={},has=false,now=iso(new Date());
+    UK.forEach(function(k){utm[k]=clean(qp.get("utm_"+k));if(utm[k])has=true});
     var c=readUtmCookie();
-    if(has){if(!c){try{document.cookie="ips_utm="+encodeURIComponent(JSON.stringify({utm:utm,captured_at:at}))+"; max-age=2592000; path=/; SameSite=Lax"+(location.protocol==="https:"?"; Secure":"")}catch(e){}}}
-    else if(c&&c.utm){UK.forEach(function(k){utm[k]=typeof c.utm[k]==="string"&&c.utm[k]?c.utm[k].slice(0,200):null});if(c.captured_at)at=c.captured_at}
-    return {page_url:String(location.href).slice(0,2000),referrer:document.referrer?String(document.referrer).slice(0,2000):null,utm:utm,captured_at:at};
+    if(has){if(!c){c={utm:utm,captured_at:now};try{document.cookie="ips_utm="+encodeURIComponent(JSON.stringify(c))+"; max-age=2592000; path=/; SameSite=Lax"+(location.protocol==="https:"?"; Secure":"")}catch(e){}}}
+    else if(c){utm=c.utm}
+    return {page_url:String(location.href).slice(0,2000),referrer:document.referrer?String(document.referrer).slice(0,2000):null,utm:utm,captured_at:now,first_touch_at:c&&c.captured_at?c.captured_at:null};
   }
   function b64u(o){return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"")}
   try{q+="&pc_attr="+b64u(attribution())}catch(e){}

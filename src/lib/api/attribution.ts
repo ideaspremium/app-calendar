@@ -6,14 +6,19 @@ import { ApiError } from "./http";
  *
  * - Sin UTM, los cinco valores de `utm` van a null; `page_url` y `referrer` se guardan
  *   siempre que se conozcan (null si no).
- * - Los valores se guardan tal como llegan (recortados). `utm.campaign` es el `code` de la
- *   campaña de Xtrategy360 en minúsculas: lo pone quien genera el enlace, aquí no se toca.
+ * - Valores UTM con trim(), sin cambiar mayúsculas, recortados a 200; vacío → null.
+ *   Xtrategy360 compara en minúsculas al atribuir.
+ * - `captured_at` = creación de la reserva y `first_touch_at` = primer contacto de la
+ *   cookie `ips_utm` (Atribución común de la suite, CONVERSIONES 1.3 / LEADS 1.2).
  */
 export type Attribution = {
   page_url: string | null;
   referrer: string | null;
   utm: { source: string | null; medium: string | null; campaign: string | null; content: string | null; term: string | null };
+  /** Instante del evento: la creación de la reserva (CONVERSIONES 1.3). Con desfase explícito. */
   captured_at: string;
+  /** Primer contacto con UTM en ese dominio (cookie `ips_utm`); null si no había cookie. */
+  first_touch_at: string | null;
 };
 
 export const UTM_KEYS = ["source", "medium", "campaign", "content", "term"] as const;
@@ -38,14 +43,22 @@ function cleanUrl(v: unknown): string | null {
   }
 }
 
-function cleanInstant(v: unknown): string | null {
+const OFFSET_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?([+-]\d{2}:\d{2}|Z)$/;
+
+/**
+ * Un instante ISO 8601 con desfase explícito (Atribución común de la suite, regla 2).
+ * Se conserva tal como llega si ya trae desfase (±hh:mm); una «Z» se escribe «+00:00».
+ * Sin zona, ilegible o absurdo (reloj del navegador mal puesto) → null.
+ */
+export function explicitOffset(v: unknown): string | null {
   if (typeof v !== "string") return null;
-  const ms = Date.parse(v);
+  const t = v.trim();
+  if (!OFFSET_RE.test(t)) return null;
+  const ms = Date.parse(t);
   if (Number.isNaN(ms)) return null;
-  // Una fecha del navegador absurda (reloj mal puesto) no se guarda como verdad.
   const now = Date.now();
   if (ms > now + 5 * 60_000 || ms < now - 400 * 86_400_000) return null;
-  return new Date(ms).toISOString();
+  return t.endsWith("Z") ? `${t.slice(0, -1)}+00:00` : t;
 }
 
 /**
@@ -64,7 +77,9 @@ export function sanitizeAttribution(input: unknown): Attribution | null {
     page_url: cleanUrl(a.page_url),
     referrer: cleanUrl(a.referrer),
     utm,
-    captured_at: cleanInstant(a.captured_at) ?? new Date().toISOString(),
+    // El servidor lo sustituye por la creación de la reserva al devolverla (serializeBooking).
+    captured_at: explicitOffset(a.captured_at) ?? new Date().toISOString().replace("Z", "+00:00"),
+    first_touch_at: explicitOffset(a.first_touch_at),
   };
   const empty = !out.page_url && !out.referrer && UTM_KEYS.every((k) => !out.utm[k]);
   return empty ? null : out;

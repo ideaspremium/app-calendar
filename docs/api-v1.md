@@ -181,7 +181,7 @@ Cabecera obligatoria: `Idempotency-Key`, hasta 255 caracteres, **una por intento
     "campaign_id": "code de campaña", "asset_id": "utm_content del activo", "origin_app": "chatbots" }
   ```
   Las claves sin valor se omiten. Se devuelve tal como se envió (objeto → objeto, texto → texto).
-- `attribution` (opcional): `{ "page_url", "referrer", "utm": { "source", "medium", "campaign", "content", "term" }, "captured_at" }`. Si falta algún UTM se guarda `null`. En las reservas hechas en la página pública se captura sola (ver «Atribución»).
+- `attribution` (opcional): `{ "page_url", "referrer", "utm": { "source", "medium", "campaign", "content", "term" }, "first_touch_at" }`, según la **Atribución común de la suite** (`CONTRATO_CONVERSIONES` 1.3). Los UTM se guardan con `trim()`, sin cambiar mayúsculas y recortados a 200; vacío → `null`. `first_touch_at` es el primer contacto (ISO 8601 con desfase) o `null`. `captured_at` no hace falta enviarlo: siempre se devuelve como el instante de creación de la reserva, en la zona del calendario. En las reservas hechas en la página pública se captura sola (ver «Atribución»).
 - `professional_id`: opcional; hoy solo puede ser el profesional del servicio.
 
 Respuesta `201`:
@@ -311,11 +311,14 @@ Content-Type: application/json
 
 ## Atribución de las reservas web
 
-En las reservas hechas en la página pública, `attribution` se rellena sola:
+En las reservas hechas en la página pública, `attribution` se rellena sola, según la **Atribución común de la suite** (`CONTRATO_CONVERSIONES` 1.3 / `CONTRATO_LEADS` 1.2):
 
-- **Embebida con `embed.js`**: el script lee los `utm_*` de la página que embebe; si no hay, los de la cookie de primera parte `ips_utm` (JSON, 30 días), que escribe la primera vez que ve UTM en ese dominio. Pasa a la reserva la URL de esa página, su `document.referrer` y esos UTM.
-- **Enlace directo**: los `utm_*` de la propia URL de reserva, la URL y el `document.referrer`.
-- Sin UTM ni cookie: los cinco UTM van a `null`, pero `page_url` y `referrer` se guardan siempre que se conozcan.
+- **Embebida con `embed.js`**: el script lee los `utm_*` de la página que embebe; si no hay, los de la cookie de primera parte `ips_utm` de ese dominio (compartida con el widget de Chatbots360). Pasa a la reserva la URL de esa página, su `document.referrer`, esos UTM y `first_touch_at`.
+- **Enlace directo**: los `utm_*` de la propia URL de reserva; si no hay, los de la cookie `ips_utm` de `calendars360.ai`. También la URL y el `document.referrer`.
+- **Cookie `ips_utm`**: `{"utm": {…}, "captured_at": "<ISO con desfase>"}`, `max-age=2592000; path=/; SameSite=Lax` (y `Secure` en https). Se escribe solo si no existe (primer contacto) y nunca se sobrescribe; unos UTM en la URL mandan en esa visita sin tocarla. Se lee también el formato plano antiguo del widget 1.1.0.
+- **`captured_at`**: instante de la **reserva** (su creación), en la zona del calendario, con desfase explícito.
+- **`first_touch_at`**: el `captured_at` de la cookie, es decir, el primer contacto con UTM en ese dominio; `null` si no había cookie.
+- Sin UTM ni cookie: los cinco UTM van a `null`; `page_url` y `referrer` se envían siempre.
 
 ## Flujo recomendado para el agente
 

@@ -112,7 +112,15 @@ export function serializeBooking(ctx: CalendarCtx, r: BookingRow) {
     answers: r.answers ?? {},
     notes: r.notes,
     external_ref: externalRefOut(r.external_ref),
-    attribution: r.attribution ?? null,
+    attribution: r.attribution
+      ? {
+          ...r.attribution,
+          // Atribución común de la suite: captured_at es el instante de la reserva (su
+          // creación), en la zona del calendario y con desfase explícito.
+          captured_at: toIsoInZone(new Date(r.created_at), tz),
+          first_touch_at: r.attribution.first_touch_at ?? null,
+        }
+      : null,
     manage: links,
     manage_url: links?.manage_url ?? null,
     cancelled_at: r.cancelled_at ? toIsoInZone(new Date(r.cancelled_at), tz) : null,
