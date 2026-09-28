@@ -5,6 +5,8 @@
 
 > Este documento es la única fuente de verdad del `business_id`. Debe estar, idéntico, en los cuatro proyectos y en el repositorio de cada app. Sustituye íntegramente a las versiones anteriores.
 
+> **Nombres (sept. 2026):** Premium Calendar pasa a llamarse **Calendars360** (`calendars360.ai`) y Premium Chatbots **Chatbots360** (`chatbots360.ai`). Los identificadores internos de este contrato no cambian.
+
 ---
 
 ## 1. Qué identifica
