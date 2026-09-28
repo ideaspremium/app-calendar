@@ -1,9 +1,9 @@
 # Contrato · Leads — Premium Chatbots → Xtrategy360
 
-**Versión 1.2** · 28 de septiembre de 2026 · Ideas Premium Solutions
+**Versión 1.2.1** · 28 de septiembre de 2026 · Ideas Premium Solutions
 **Emisor:** Premium Chatbots (capta el lead). **Consumidor:** Xtrategy360 (lo registra, lo atribuye y lo mide).
 
-> Única fuente de verdad sobre cómo Premium Chatbots entrega leads a Xtrategy360. Debe estar, idéntico, en los proyectos de Premium Chatbots y Xtrategy360 y en el repositorio de ambas apps (`/docs/`). Sustituye íntegramente a la versión 1.0. Si cambia, se cambia aquí primero y se sube la versión. Se apoya en `XTRATEGY360_Decisiones_Cerradas_v1` y `CONTRATO_BUSINESS_ID` v1.1.
+> Única fuente de verdad sobre cómo Premium Chatbots entrega leads a Xtrategy360. Debe estar, idéntico, en los proyectos de Premium Chatbots y Xtrategy360 y en el repositorio de ambas apps (`/docs/`). Sustituye íntegramente a las versiones anteriores. Si cambia, se cambia aquí primero y se sube la versión. Se apoya en `XTRATEGY360_Decisiones_Cerradas_v1` y `CONTRATO_BUSINESS_ID` v1.1.
 
 > **Nombres (sept. 2026):** Premium Calendar pasa a llamarse **Calendars360** (`calendars360.ai`) y Premium Chatbots **Chatbots360** (`chatbots360.ai`). Los identificadores internos de este contrato no cambian.
 
@@ -185,7 +185,7 @@ Idempotencia total: repetir un ciclo entero no produce cambios.
 
 ## 7. Transición y compatibilidad
 
-- Mientras `tenants.business_id` esté vacío para algún tenant, Xtrategy360 resuelve por `tenant_slug`. Cuando todos los tenants activos tengan `business_id`, se declara cerrada la transición y `business_id` pasa a `not null` en la vista (versión 1.1 de este contrato).
+- Mientras `tenants.business_id` esté vacío para algún tenant, Xtrategy360 resuelve por `tenant_slug`. Cuando todos los tenants activos tengan `business_id`, se declara cerrada la transición y `business_id` pasará a `not null` en la vista, en una versión futura de este contrato.
 - `leads_para_sincronizar` (sin sufijo) se retira una vez que Xtrategy360 confirme que lee la `_v1`.
 - **Push** (trigger + `pg_net` hacia un webhook de Xtrategy360) queda como acelerador opcional para Fase 2; el pull se mantiene siempre como red de seguridad.
 - *(1.1)* Existe un **tenant de integración** `xtrategy-integracion` (sin modo prueba) para probar la ingesta de extremo a extremo sin tocar tenants reales. Sus leads se enlazan en Xtrategy360 a un negocio de pruebas.
@@ -194,7 +194,7 @@ Idempotencia total: repetir un ciclo entero no produce cambios.
 
 Estado comercial del lead (es de la agencia, en Chatbots), verificación telefónica, canales Meta, agendado desde el bot (irá contra Premium Calendar y se documentará en `CONTRATO_CONVERSIONES`), y cualquier envío del lead a un CRM externo (Fase 2, desde Xtrategy360).
 
-## Atribución común de la suite *(sección idéntica en CONTRATO_LEADS 1.2 y CONTRATO_CONVERSIONES 1.3)*
+## Atribución común de la suite *(sección idéntica en CONTRATO_LEADS 1.2.1 y CONTRATO_CONVERSIONES 1.3.1)*
 
 Todo emisor que capture atribución web (widget de Chatbots360, `embed.js` y página pública de Calendars360, landings) sigue esta regla:
 
@@ -212,7 +212,8 @@ Todo emisor que capture atribución web (widget de Chatbots360, `embed.js` y pá
 
 1. **Valores UTM:** se aplica `trim()`, sin cambiar mayúsculas ni minúsculas, y se recortan a 200 caracteres. Un valor vacío tras `trim()` es `null`. Xtrategy360 compara en minúsculas al atribuir (`campaigns.code`, `assets.utm_content`).
 2. **`captured_at`:** instante del **evento** que genera el registro (inicio de la conversación en Chatbots360, creación de la reserva en Calendars360), en ISO 8601 **con desfase explícito**. Xtrategy360 acepta `Z` como equivalente a `+00:00`, pero los emisores envían desfase.
-3. **`first_touch_at`:** el `captured_at` guardado en la cookie `ips_utm` (primer contacto con UTM en ese dominio). `null` si no había cookie.
+3. **`first_touch_at`:** el `captured_at` guardado en la cookie `ips_utm` (primer contacto con UTM en ese dominio). Si la cookie no existía y el emisor la escribe en esta visita, `first_touch_at` es el `captured_at` que acaba de guardar en ella. `null` solo si no hay cookie ni UTM que la creen, o si el dato no se puede conocer (registros anteriores a esta regla, o `first_touch_at` recibido por API sin zona horaria).
+3-bis. **Registros creados por API:** `captured_at` es siempre el instante de creación en el emisor (si el integrador lo envía, se ignora); `first_touch_at` se respeta si viene en ISO 8601 con zona, y es `null` si viene sin zona.
 4. **Origen de los `utm`:** si la URL de la visita trae `utm_*`, mandan esos; si no, los de la cookie; si no hay ninguno, todos `null`. `page_url` y `referrer` se envían siempre.
 5. **Cookie `ips_utm`** (compartida entre apps en el mismo dominio): valor JSON `{"utm": {…}, "captured_at": "<ISO con desfase>"}`, atributos `max-age=2592000; path=/; SameSite=Lax` y `Secure` en https. **Se escribe solo si no existe** (primer contacto) y **nunca se sobrescribe**; unos UTM en la URL mandan en esa visita sin tocarla. Los emisores leen también el formato plano antiguo del widget 1.1.0 por compatibilidad.
 
@@ -224,6 +225,10 @@ Cambios menores (campos nuevos opcionales) → 1.x, compatibles. Cambios mayores
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.2.1 | 28 sept. 2026 | Aclaración de `first_touch_at` en la visita que crea la cookie (misma regla que ya aplican Chatbots360 y Calendars360); erratas de cabecera y §7 |
 | 1.2 | 28 sept. 2026 | Atribución común de la suite (idéntica en CONVERSIONES 1.3): normalización UTM (`trim`, ≤200), `captured_at` = evento con desfase, nuevo `first_touch_at`, cookie `ips_utm` compartida de primer contacto. Cierre CB-02: widget 1.2.0 en `chatbots360.ai` |
 | 1.0 | 23 sept. 2026 | Contrato inicial: vista versionada, rol servido por PostgREST, RPC de marcado, atribución en origen |
 | 1.1 | 23 sept. 2026 | Vista incluye `sync_status in ('pending','error')` y expone `sync_status`/`sync_error` (resuelve la contradicción §4.3/§6.3); reintento con espera creciente; `is_test` cubre tenants en modo prueba; `revoke` de vista y RPC a `anon`/`authenticated`; tenant de integración `xtrategy-integracion` |
+
+
+**Regla de verificación:** las pruebas que deban aparecer en la vista se hacen desde una página con el snippet pegado y el tenant `xtrategy-integracion` (sin modo prueba), nunca desde la página de prueba del panel, que marca todo como `is_test`.
