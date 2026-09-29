@@ -180,17 +180,27 @@ html:has(.pc[data-embedded="true"]) body { background: transparent; }
 .pc nylas-scheduling::part(ndp__title) { display: none; }
 .pc[data-style="clasico"] nylas-scheduling { border-radius: 0 calc(var(--pc-radius) * 2) calc(var(--pc-radius) * 2) 0; background: var(--pc-bg); overflow: hidden; }
 .pc[data-style="clasico"] nylas-scheduling::part(ns_right-panel) { border-bottom-right-radius: calc(var(--pc-radius) * 2); }
-/* Fecha sobre las horas. Nylas la pone en una fila flexible sin margen lateral, así que las
-   fechas largas («Miércoles, 30 de septiembre de 2026») llegaban al borde. Ahora hay 16 px a
-   cada lado y, si no cabe, pasa a dos líneas equilibradas con el icono pegado al texto. */
-.pc nylas-scheduling::part(ns_right-panel__title) {
-  display: block; height: auto; min-height: 48px; padding: 12px 16px; line-height: 24px; text-align: center; text-wrap: balance;
+/* Fecha sobre las horas. Nylas da a la lista de horas el alto «panel − 48 px», así que el
+   título tiene que medir siempre 48 px: si crece, el final de la lista (y la última hora) queda
+   fuera del panel, cortada. Con 16 px a cada lado y líneas de 21 px caben dos líneas
+   equilibradas. El icono se dibuja dentro del texto para que quede pegado a él. */
+.pc nylas-scheduling::part(ns_right-panel__title) { height: 48px; padding: 0 16px; line-height: 21px; }
+.pc nylas-scheduling::part(ns_right-panel__calendar-icon) { display: none; }
+.pc nylas-scheduling::part(ns_right-panel__selected-date) { min-width: 0; text-align: center; text-wrap: balance; overflow-wrap: anywhere; }
+.pc nylas-scheduling::part(ns_right-panel__selected-date)::before {
+  content: ""; display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -2px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4.5' width='18' height='16.5' rx='3'/%3E%3Cpath d='M3 9.5h18M8 2.5v4M16 2.5v4'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4.5' width='18' height='16.5' rx='3'/%3E%3Cpath d='M3 9.5h18M8 2.5v4M16 2.5v4'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-.pc nylas-scheduling::part(ns_right-panel__calendar-icon) { display: inline-block; vertical-align: -2px; margin-right: 8px; }
-.pc nylas-scheduling::part(ns_right-panel__selected-date) { overflow-wrap: anywhere; }
-/* Nylas deja la barra de desplazamiento siempre visible (en Windows sale con flechas aunque
-   haya una sola hora): solo aparece si hace falta, y fina. */
-.pc nylas-scheduling::part(ntp__timeslots) { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--pc-n300) transparent; }
+/* Lista de horas: la barra solo aparece si hace falta, y fina (Nylas la dejaba siempre; en
+   Windows, con flechas). Abajo hay aire para que la última hora no toque el borde, y los dos
+   extremos se funden para que una hora a medio desplazar no parezca cortada. */
+.pc nylas-scheduling::part(ntp__timeslots) {
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--pc-n300) transparent;
+  padding-top: 10px; padding-bottom: 24px;
+  -webkit-mask: linear-gradient(to bottom, transparent, #000 10px, #000 calc(100% - 24px), transparent);
+          mask: linear-gradient(to bottom, transparent, #000 10px, #000 calc(100% - 24px), transparent);
+}
 
 @media (min-width: 769px) {
   .pc nylas-scheduling { width: 100%; }
@@ -213,7 +223,7 @@ html:has(.pc[data-embedded="true"]) body { background: transparent; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.55), 0 20px 40px -24px var(--pc-glow);
 }
 .pc[data-style="vidrio"] nylas-scheduling::part(ns_right-panel__title) { color: var(--pc-text); font-weight: 600; }
-.pc[data-style="vidrio"] nylas-scheduling::part(ns_right-panel__calendar-icon) { color: var(--pc-ink); }
+.pc[data-style="vidrio"] nylas-scheduling::part(ns_right-panel__selected-date)::before { background: var(--pc-ink); }
 .pc[data-style="vidrio"] nylas-scheduling::part(ns_booked-event-page),
 .pc[data-style="vidrio"] nylas-scheduling::part(confirmed-event-page),
 .pc[data-style="vidrio"] nylas-scheduling::part(cancelled-event-page),
@@ -243,7 +253,7 @@ html:has(.pc[data-embedded="true"]) body { background: transparent; }
   background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 48%, rgba(255,255,255,0) 100%), var(--pc-day-sel-bg);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 2px var(--pc-day-sel-rim), 0 0 0 4px var(--pc-day-sel-halo), 0 10px 22px -10px var(--pc-glow-ink);
 }
-.pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslots) { padding: 6px 14px; }
+.pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslots) { padding: 10px 14px 24px; }
 .pc[data-style="vidrio"] nylas-scheduling::part(ntp__timeslot) {
   position: relative; height: 50px; border-radius: 999px; outline: none; color: var(--pc-text); font-weight: 600;
   background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.46));
