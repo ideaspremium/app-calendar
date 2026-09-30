@@ -19,7 +19,7 @@ export const LEGAL = {
     es: "las leyes del estado de Florida (EE. UU.), sin perjuicio de los derechos que la ley de su país de residencia reconozca a los consumidores",
     en: "the laws of the State of Florida (USA), without prejudice to the rights that consumers have under the law of their country of residence",
   } as { es: string; en: string } | null,
-  updated: { es: "24 de septiembre de 2026", en: "September 24, 2026" },
+  updated: { es: "29 de septiembre de 2026", en: "September 29, 2026" },
 };
 
 export const holderName = () => LEGAL.legalName ?? LEGAL.company;

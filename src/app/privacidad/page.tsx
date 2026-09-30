@@ -114,6 +114,22 @@ export default function Privacidad() {
           </li>
           <li>Solo los transferimos a los proveedores del apartado 5, en la medida necesaria para prestar el servicio.</li>
         </ul>
+        <h3>Inteligencia artificial</h3>
+        <p>
+          El uso de los datos de usuario, en bruto o derivados, recibidos de las API de Google Workspace se ajusta a la
+          Política de datos de usuario de Google, incluidos los requisitos de Uso limitado. En concreto:
+        </p>
+        <ul>
+          <li>
+            Los datos recibidos de las API de Google Workspace, ni en bruto ni agregados, anonimizados o derivados,{" "}
+            <b>no se usan para desarrollar, mejorar ni entrenar modelos generalizados de inteligencia artificial o de
+            aprendizaje automático</b>.
+          </li>
+          <li>
+            Calendars360 no procesa esos datos con modelos de inteligencia artificial ni los transfiere a servicios de
+            inteligencia artificial de terceros.
+          </li>
+        </ul>
 
         <h2>5. Con quién los compartimos</h2>
         <ul>
@@ -257,6 +273,20 @@ export default function Privacidad() {
               the law, or in aggregated and anonymized form for internal operations.
             </li>
             <li>We only transfer it to the providers in section 5, to the extent needed to provide the service.</li>
+          </ul>
+          <h3>Artificial intelligence</h3>
+          <p>
+            The use of raw or derived user data received from Google Workspace APIs will adhere to the Google User Data
+            Policy, including the Limited Use requirements. Specifically:
+          </p>
+          <ul>
+            <li>
+              <b>Google Workspace APIs are not used to develop, improve, or train generalized AI and/or ML models.</b>{" "}
+              Data received from them, whether raw, aggregated, anonymized or derived, is never used for that purpose.
+            </li>
+            <li>
+              Calendars360 does not process this data with AI models and does not transfer it to third-party AI services.
+            </li>
           </ul>
 
           <h2>5. Who we share it with</h2>
