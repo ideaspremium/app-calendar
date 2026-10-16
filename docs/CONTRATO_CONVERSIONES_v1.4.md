@@ -1,6 +1,6 @@
 # Contrato · Conversiones → Xtrategy360
 
-**Versión 1.3.1** · 28 de septiembre de 2026 · Ideas Premium Solutions
+**Versión 1.4** · 16 de octubre de 2026 · Ideas Premium Solutions
 **Emisores:** Premium Calendar (reservas) · SaaS de landing pages (formularios) · Premium Chatbots (reservas creadas por bots, vía Calendar) · futuros (CRM, comercio).
 **Consumidor:** Xtrategy360.
 
@@ -157,7 +157,7 @@ Reglas:
 6. Toda conversión sin `campaign_id` cuenta igualmente en `conversions_total`; la atribución es progresiva, no una condición de registro.
 7. *(1.2, sustituye al límite de 1.1)* **Cambios hechos en el calendario del profesional se detectan** (anexo PC-01c): si el invitado rechaza la invitación de Google, la cita pasa a `cancelled` con `cancel_reason = "El invitado rechazó la invitación del calendario"`; si el profesional borra el evento, `cancelled` con `cancel_reason = "El profesional eliminó el evento de su calendario"`; si lo mueve de hora, `rescheduled` con `start_at`/`end_at` nuevos. Llegan por aviso y por listado (cambia `updated_at`), con segundos o pocos minutos de retraso. Un rechazo es definitivo. Las citas pasadas no se tocan. **`cancel_reason` distingue el origen de la cancelación** (visitante por enlace o API, rechazo de invitación, borrado por el profesional); Xtrategy360 lo conserva en `conversions.raw` y lo usa para desglosar `booking_cancel_rate`.
 
-## Atribución común de la suite *(sección idéntica en CONTRATO_LEADS 1.2.1 y CONTRATO_CONVERSIONES 1.3.1)*
+## Atribución común de la suite *(sección idéntica en CONTRATO_LEADS 1.3 y CONTRATO_CONVERSIONES 1.4)*
 
 Todo emisor que capture atribución web (widget de Chatbots360, `embed.js` y página pública de Calendars360, landings) sigue esta regla:
 
@@ -169,16 +169,27 @@ Todo emisor que capture atribución web (widget de Chatbots360, `embed.js` y pá
   "utm": { "source": "…|null", "medium": "…|null", "campaign": "…|null", "content": "…|null", "term": "…|null" },
   "captured_at": "2026-10-03T17:42:11+01:00",
   "first_touch_at": "2026-09-29T10:05:00+01:00 | null",
-  "widget_version": "opcional"
+  "widget_version": "opcional",
+  "whatsapp": {
+    "ref": "H8H3JAB",
+    "ctwa": {
+      "source_id": "120211234567890123",
+      "source_type": "ad",
+      "source_url": "https://fb.me/…",
+      "headline": "Tasación gratuita",
+      "body": "…",
+      "ctwa_clid": "…"
+    }
+  }
 }
 ```
 
 1. **Valores UTM:** se aplica `trim()`, sin cambiar mayúsculas ni minúsculas, y se recortan a 200 caracteres. Un valor vacío tras `trim()` es `null`. Xtrategy360 compara en minúsculas al atribuir (`campaigns.code`, `assets.utm_content`).
 2. **`captured_at`:** instante del **evento** que genera el registro (inicio de la conversación en Chatbots360, creación de la reserva en Calendars360), en ISO 8601 **con desfase explícito**. Xtrategy360 acepta `Z` como equivalente a `+00:00`, pero los emisores envían desfase.
-3. **`first_touch_at`:** el `captured_at` guardado en la cookie `ips_utm` (primer contacto con UTM en ese dominio). Si la cookie no existía y el emisor la escribe en esta visita, `first_touch_at` es el `captured_at` que acaba de guardar en ella. `null` solo si no hay cookie ni UTM que la creen, o si el dato no se puede conocer (registros anteriores a esta regla, o `first_touch_at` recibido por API sin zona horaria).
-3-bis. **Registros creados por API:** `captured_at` es siempre el instante de creación en el emisor (si el integrador lo envía, se ignora); `first_touch_at` se respeta si viene en ISO 8601 con zona, y es `null` si viene sin zona.
+3. **`first_touch_at`:** el `captured_at` guardado en la cookie `ips_utm` (primer contacto con UTM en ese dominio). `null` si no había cookie.
 4. **Origen de los `utm`:** si la URL de la visita trae `utm_*`, mandan esos; si no, los de la cookie; si no hay ninguno, todos `null`. `page_url` y `referrer` se envían siempre.
 5. **Cookie `ips_utm`** (compartida entre apps en el mismo dominio): valor JSON `{"utm": {…}, "captured_at": "<ISO con desfase>"}`, atributos `max-age=2592000; path=/; SameSite=Lax` y `Secure` en https. **Se escribe solo si no existe** (primer contacto) y **nunca se sobrescribe**; unos UTM en la URL mandan en esa visita sin tocarla. Los emisores leen también el formato plano antiguo del widget 1.1.0 por compatibilidad.
+6. **Bloque `whatsapp`** *(LEADS 1.3 / CONVERSIONES 1.4)*: **opcional**, solo aparece en registros con `channel = "whatsapp"`; en los demás canales se omite (no se envía vacío ni `null`). Dentro de él, `ref` y `ctwa` son opcionales e independientes. `ref` es la referencia del enlace trazado de Xtrategy360 (`[A-Z2-9]{6,12}`), capturada por el emisor en el primer mensaje del visitante que la contenga y nunca sobrescrita; el emisor la retira del texto antes de procesarlo. `ctwa` es el objeto `referral` de un anuncio click-to-WhatsApp de Meta, copiado del primer mensaje de la conversación con los nombres de la API Cloud (`source_id`, `source_type`, `source_url`, `headline`, `body`, `ctwa_clid`) sea cual sea el transporte, y nunca sobrescrito. Xtrategy360 atribuye con `ref` (`attribution_method = wa_ref`) o con `ctwa.source_id` (`attribution_method = ctwa`). En `page_url`, `referrer`, `utm` y `first_touch_at` el canal de WhatsApp envía `null`; `captured_at` es el instante del primer mensaje.
 
 ## 6. Evolución
 
@@ -188,6 +199,7 @@ Cambios menores → 1.x. Cambios de forma del objeto o de la ruta → 2.0, con p
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.4 | 16 oct. 2026 | Sección «Atribución común de la suite» actualizada, idéntica a CONTRATO_LEADS 1.3: nuevo bloque opcional `whatsapp` (`ref` de enlaces trazados y `ctwa` de anuncios click-to-WhatsApp), solo en registros con `channel = "whatsapp"`. Cambio informativo para Calendars360: no requiere trabajo mientras no emita registros de WhatsApp |
 | 1.3.1 | 28 sept. 2026 | Aclaración de `first_touch_at` en la visita que crea la cookie; en reservas por API, `captured_at` es siempre la creación de la reserva (se ignora si el integrador lo envía) y `first_touch_at` se respeta solo con zona horaria |
 | 1.3 | 28 sept. 2026 | Atribución común de la suite (idéntica en LEADS 1.2): normalización UTM (`trim`, ≤200), `captured_at` = momento de la reserva con desfase (antes, primer contacto en UTC `Z`), nuevo `first_touch_at`, cookie `ips_utm` compartida documentada |
 | 1.0 | 23 sept. 2026 | Contrato inicial: convención de atribución, listado incremental y webhook total en Calendar, endpoint genérico de conversiones |
